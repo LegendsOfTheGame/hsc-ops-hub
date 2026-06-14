@@ -127,6 +127,7 @@ function initPunchClock() {
       try {
         await insert('shifts', { date: punch.date, hours, notes: 'Clocked via punch clock' });
         showToast(`Shift saved — ${hours.toFixed(2)} hrs`);
+        navigate('shifts');
       } catch {
         showToast('Shift record failed to save', 4000);
       }
