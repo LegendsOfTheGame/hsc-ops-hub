@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "hsc-field-app",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "app", "-p", "3000", "--no-clipboard"],
+      "port": 3000
+    }
+  ]
+}

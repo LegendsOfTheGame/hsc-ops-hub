@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="HSC Ops">
+  <title>HSC Ops Hub</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ── Login screen ── -->
+  <div id="login-screen">
+    <div class="login-box">
+      <div class="login-logo">HSC OPS HUB</div>
+      <div class="login-sub">Hammer Street Clean</div>
+      <form id="login-form" autocomplete="on">
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="login-email" autocomplete="username" placeholder="you@example.com" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="login-password" autocomplete="current-password" placeholder="••••••••" required>
+        </div>
+        <div class="login-error" id="login-error"></div>
+        <button type="submit" class="btn btn-primary login-submit" id="login-btn">Sign In</button>
+      </form>
+      <div class="login-footer">Session expires after 60 minutes of inactivity.</div>
+    </div>
+  </div>
+
+  <!-- ── Mobile top bar ── -->
+  <div class="mobile-topbar" id="mobile-topbar" style="display:none">
+    <button class="hamburger" id="hamburger">☰</button>
+    <span class="mobile-title">HSC OPS HUB</span>
+    <span></span>
+  </div>
+
+  <!-- Sidebar overlay -->
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <!-- ── App shell ── -->
+  <div class="app-layout" id="app-shell" style="display:none">
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">HSC OPS HUB</div>
+        <div class="sidebar-sub">Hammer Street Clean</div>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebar-nav">
+        <a class="nav-item" data-page="home">          <span class="nav-icon">🏠</span> Home</a>
+        <a class="nav-item" data-page="field">         <span class="nav-icon">📍</span> Field Log</a>
+        <div class="nav-divider"></div>
+        <a class="nav-item" data-page="graffiti">      <span class="nav-icon">🎨</span> Graffiti Log</a>
+        <a class="nav-item" data-page="inbox">         <span class="nav-icon">📥</span> Inbox <span class="nav-badge" id="badge-inbox" hidden></span></a>
+        <a class="nav-item" data-page="bia">           <span class="nav-icon">🚨</span> BIA Jobs</a>
+        <div class="nav-divider"></div>
+        <a class="nav-item" data-page="sites">         <span class="nav-icon">🏚️</span> Client Sites</a>
+        <a class="nav-item" data-page="outreach">      <span class="nav-icon">📣</span> Outreach <span class="nav-badge nav-badge-amber" id="badge-outreach" hidden></span></a>
+        <div class="nav-divider"></div>
+        <a class="nav-item" data-page="shifts">        <span class="nav-icon">📋</span> Shift Log</a>
+        <a class="nav-item" data-page="inventory">     <span class="nav-icon">📦</span> Inventory</a>
+        <a class="nav-item" data-page="expenses">      <span class="nav-icon">💵</span> My Expenses</a>
+        <div class="nav-divider"></div>
+        <a class="nav-item" data-page="reports">       <span class="nav-icon">📄</span> Reports</a>
+        <a class="nav-item" data-page="events">        <span class="nav-icon">📅</span> Events</a>
+        <a class="nav-item" data-page="settings">      <span class="nav-icon">⚙️</span> Settings</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div id="sidebar-user" style="color:var(--text-secondary);margin-bottom:6px;font-size:12px;"></div>
+        <button class="btn btn-secondary btn-sm" id="logout-btn" style="width:100%">Sign Out</button>
+        <div style="margin-top:8px">HSC Business Services<br>v2.0.0</div>
+      </div>
+    </aside>
+
+    <main class="main-content" id="main-content">
+      <div id="page-root"></div>
+    </main>
+
+  </div>
+
+  <!-- Mobile bottom nav -->
+  <nav class="mobile-nav">
+    <a class="mobile-nav-item" data-page="home">     <span>🏠</span><span>Home</span></a>
+    <a class="mobile-nav-item" data-page="field">    <span>📍</span><span>Field</span></a>
+    <a class="mobile-nav-item" data-page="graffiti"> <span>🎨</span><span>Graffiti</span></a>
+    <a class="mobile-nav-item" data-page="sites">    <span>🏚️</span><span>Sites</span></a>
+    <a class="mobile-nav-item" id="mobile-more-btn"> <span>☰</span><span>More</span></a>
+  </nav>
+
+  <!-- Toast -->
+  <div class="toast" id="toast" hidden></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
