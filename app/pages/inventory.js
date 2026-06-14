@@ -1,9 +1,11 @@
 import { select, insert, update } from '../db.js';
 import { showToast, openModal, closeModal } from '../utils.js';
+import { getRole } from '../auth.js';
 
 let allItems = [];
 
 export async function renderInventory(root) {
+  const isField = getRole() === 'field';
   root.innerHTML = `
     <div class="page-title">Inventory</div>
     <div class="page-subtitle">Supply stock and cost tracking (AVCO method)</div>
@@ -13,13 +15,14 @@ export async function renderInventory(root) {
     </div>
     <div id="inv-wrap"><div class="loading">Loading…</div></div>
   `;
-  root.querySelector('#inv-add').addEventListener('click', () => openItemModal(null, root));
+  root.querySelector('#inv-add').addEventListener('click', () => openItemModal(null, root, isField));
   const { data } = await select('inventory_items', { order: 'name', ascending: true });
   allItems = data || [];
   renderItems(root);
 }
 
 function renderItems(root) {
+  const isField = getRole() === 'field';
   const wrap = root.querySelector('#inv-wrap');
   if (!wrap) return;
   if (!allItems.length) { wrap.innerHTML = `<div class="empty-state"><div class="icon">📦</div>No inventory items yet.</div>`; return; }
@@ -40,7 +43,7 @@ function renderItems(root) {
           <td style="min-width:80px">
             <div class="${level}"><div class="stock-bar"><div class="stock-bar-fill" style="width:${pct}%"></div></div></div>
           </td>
-          <td><button class="btn btn-sm btn-secondary" data-id="${item.id}">Edit</button></td>
+          <td><button class="btn btn-sm btn-secondary" data-id="${item.id}">${isField ? 'Add Stock' : 'Edit'}</button></td>
         </tr>`;
       }).join('')}
     </tbody>
@@ -48,7 +51,37 @@ function renderItems(root) {
   wrap.querySelectorAll('button[data-id]').forEach(btn => {
     btn.addEventListener('click', () => {
       const item = allItems.find(i => String(i.id) === btn.dataset.id);
-      if (item) openItemModal(item, root);
+      if (!item) return;
+      if (isField) openAddStockModal(item, root);
+      else openItemModal(item, root, false);
+    });
+  });
+}
+
+function openAddStockModal(item, root) {
+  const html = `
+    <div class="modal-header"><h2>Add Stock — ${item.name}</h2><button class="modal-close">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Quantity to Add</label>
+        <input type="number" id="inv-add-qty" min="0.01" step="0.01" placeholder="e.g. 1">
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary" id="inv-add-save">Add Stock</button>
+        <button class="btn btn-secondary" id="inv-add-cancel">Cancel</button>
+      </div>
+    </div>`;
+  openModal(html, box => {
+    box.querySelector('#inv-add-cancel').addEventListener('click', closeModal);
+    box.querySelector('#inv-add-save').addEventListener('click', async () => {
+      const qty = parseFloat(box.querySelector('#inv-add-qty').value) || 0;
+      if (qty <= 0) { showToast('Enter a positive quantity'); return; }
+      await update('inventory_items', { id: item.id }, { quantity: parseFloat(item.quantity || 0) + qty });
+      showToast('✓ Stock added');
+      closeModal();
+      const { data } = await select('inventory_items', { order: 'name', ascending: true });
+      allItems = data || [];
+      renderItems(root);
     });
   });
 }

@@ -67,6 +67,12 @@ export function getAuthUser() {
   return loadSession()?.user ?? null;
 }
 
+// Returns 'admin' | 'field' | 'bia' — defaults to 'admin' if not set
+export function getRole() {
+  const user = getAuthUser();
+  return user?.user_metadata?.role || 'admin';
+}
+
 // Returns true if the user is authenticated and session hasn't timed out
 export function isAuthenticated() {
   if (!loadSession()) return false;
