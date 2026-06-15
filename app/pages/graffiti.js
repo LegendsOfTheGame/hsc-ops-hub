@@ -193,10 +193,12 @@ function openEntryModal(entry, root) {
       };
 
       if (isNew) {
-        await insert('graffiti_log', row);
+        const { error } = await insert('graffiti_log', row);
+        if (error) { showToast('Error: ' + (error.message || JSON.stringify(error)), 'error'); return; }
         showToast('✓ Entry added');
       } else {
-        await update('graffiti_log', { id: entry.id }, row);
+        const { error } = await update('graffiti_log', { id: entry.id }, row);
+        if (error) { showToast('Error: ' + (error.message || JSON.stringify(error)), 'error'); return; }
         showToast('✓ Entry updated');
       }
       closeModal();
