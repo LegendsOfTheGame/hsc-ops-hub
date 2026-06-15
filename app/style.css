@@ -452,6 +452,20 @@ html, body {
 .field-card-label { font-size: 16px; font-weight: 700; color: var(--text-primary); }
 .field-card-sub   { font-size: 12px; color: var(--text-muted); }
 
+/* ── Citizen report rows ── */
+.citizen-report-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.citizen-report-row:last-child { border-bottom: none; }
+.cr-main        { flex: 1; min-width: 0; }
+.cr-location    { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cr-desc        { font-size: 12px; color: var(--text-secondary); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cr-meta        { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
 /* ── Modals ── */
 .modal-backdrop {
   position: fixed; inset: 0;

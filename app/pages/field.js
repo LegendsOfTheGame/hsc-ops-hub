@@ -1,4 +1,4 @@
-import { select, insert } from '../db.js';
+import { select, insert, update } from '../db.js';
 import { showToast, openModal, closeModal, getGPS, coordsStr, initChips, chipValue, localDateStr, fmtDateTime } from '../utils.js';
 
 const SURFACES  = ['Brick','Metal','Glass','Plastic','Concrete','Wood','Other'];
@@ -46,6 +46,14 @@ export async function renderField(root) {
     </div>
 
     <div class="card">
+      <div class="card-title" style="display:flex;align-items:center;gap:8px">
+        Citizen Reports
+        <span class="nav-badge" id="citizen-badge" hidden></span>
+      </div>
+      <div id="citizen-reports"><div class="loading">Loading…</div></div>
+    </div>
+
+    <div class="card">
       <div class="card-title">Today's Logs</div>
       <div id="field-history"><div class="loading">Loading…</div></div>
     </div>
@@ -55,6 +63,7 @@ export async function renderField(root) {
   root.querySelector('#btn-graffiti').addEventListener('click', () => openGraffitiModal(root));
 
   loadFieldHistory(root, today);
+  loadCitizenReports(root);
 }
 
 function saveCount(today, bags, graffiti) {
@@ -273,6 +282,54 @@ async function openGraffitiModal(root) {
       closeModal();
       showToast('✓ Graffiti logged');
       loadFieldHistory(root, today);
+    });
+  });
+}
+
+// ── Citizen reports ───────────────────────────────────────────────────────────
+
+async function loadCitizenReports(root) {
+  const wrap = root.querySelector('#citizen-reports');
+  const badge = root.querySelector('#citizen-badge');
+  if (!wrap) return;
+
+  const { data } = await select('incoming_reports', {
+    filter: { status: 'pending' },
+    order: 'created_at',
+    ascending: false,
+    limit: 10,
+  });
+
+  const reports = data || [];
+
+  if (badge) {
+    badge.textContent = reports.length;
+    badge.hidden = reports.length === 0;
+  }
+
+  if (!reports.length) {
+    wrap.innerHTML = '<div class="empty-state" style="padding:12px 0">No pending citizen reports.</div>';
+    return;
+  }
+
+  wrap.innerHTML = reports.map(r => {
+    const firstLine = (r.description || '').split('\n')[0] || '—';
+    return `<div class="citizen-report-row" data-id="${r.id}">
+      <div class="cr-main">
+        <div class="cr-location">${r.location || '—'}</div>
+        <div class="cr-desc">${firstLine}</div>
+        <div class="cr-meta">${r.source_id || ''} · ${r.date || ''}</div>
+      </div>
+      <button class="btn btn-sm btn-secondary cr-done" data-id="${r.id}">✓ Done</button>
+    </div>`;
+  }).join('');
+
+  wrap.querySelectorAll('.cr-done').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      await update('incoming_reports', { id: btn.dataset.id }, { status: 'reviewed' });
+      showToast('Marked as reviewed');
+      loadCitizenReports(root);
     });
   });
 }
