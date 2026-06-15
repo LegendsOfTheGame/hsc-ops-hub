@@ -167,8 +167,15 @@ function openSiteModal(site, root) {
         notes:         box.querySelector('#s-notes').value.trim() || null,
       };
 
-      if (isNew) { await insert('client_sites', row); showToast('✓ Site added'); }
-      else       { await update('client_sites', { id: site.id }, row); showToast('✓ Site updated'); }
+      if (isNew) {
+        const { error } = await insert('client_sites', row);
+        if (error) { showToast('Error: ' + (error.message || JSON.stringify(error)), 'error'); return; }
+        showToast('✓ Site added');
+      } else {
+        const { error } = await update('client_sites', { id: site.id }, row);
+        if (error) { showToast('Error: ' + (error.message || JSON.stringify(error)), 'error'); return; }
+        showToast('✓ Site updated');
+      }
 
       closeModal();
       const { data } = await select('client_sites', { order: 'name', ascending: true });

@@ -1,14 +1,16 @@
 // Shared helpers — imported by pages. No imports from app.js to avoid circular deps.
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
-export function showToast(msg, duration = 2500) {
+export function showToast(msg, type = 'info', duration = 2500) {
   const t = document.getElementById('toast');
   if (!t) return;
   t.textContent = msg;
   t.hidden = false;
+  t.classList.remove('show', 'toast-error');
+  if (type === 'error') { t.classList.add('toast-error'); duration = 6000; }
   t.classList.add('show');
   setTimeout(() => {
-    t.classList.remove('show');
+    t.classList.remove('show', 'toast-error');
     setTimeout(() => { t.hidden = true; }, 200);
   }, duration);
 }
