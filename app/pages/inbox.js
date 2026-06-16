@@ -1,4 +1,4 @@
-import { select, update } from '../db.js';
+import { select, insert, update } from '../db.js';
 import { showToast, fmtDateTime, navigate } from '../utils.js';
 
 let allReports = [];
@@ -62,15 +62,35 @@ function renderTable(root) {
   wrap.querySelectorAll('button[data-action]').forEach(btn => {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
-      const newStatus = btn.dataset.action === 'import' ? 'imported' : 'dismissed';
+      const action = btn.dataset.action;
+      const report = allReports.find(r => String(r.id) === btn.dataset.id);
+
+      if (action === 'import' && report) {
+        const { error: insertErr } = await insert('graffiti_log', {
+          timestamp:  `${report.date || new Date().toISOString().slice(0, 10)} 00:00:00`,
+          location:   report.location || '',
+          status:     'Pending',
+          image_link: report.image_url || null,
+          notes:      report.description || null,
+          source_ref: report.source_id || null,
+        });
+        if (insertErr) {
+          showToast('Failed to add to Graffiti Log', 4000);
+          console.error('graffiti_log insert error:', insertErr);
+          btn.disabled = false;
+          return;
+        }
+      }
+
+      const newStatus = action === 'import' ? 'imported' : 'dismissed';
       const { error } = await update('incoming_reports', { id: btn.dataset.id }, { status: newStatus });
       if (error) {
-        showToast('Update failed — check console', 4000);
+        showToast('Status update failed — check console', 4000);
         console.error('inbox update error:', error);
         btn.disabled = false;
         return;
       }
-      showToast(newStatus === 'imported' ? '✓ Imported' : '✓ Dismissed');
+      showToast(newStatus === 'imported' ? '✓ Added to Graffiti Log' : '✓ Dismissed');
       const { data } = await select('incoming_reports', { order: 'sync_timestamp', ascending: false });
       allReports = data || [];
       renderTable(root);
