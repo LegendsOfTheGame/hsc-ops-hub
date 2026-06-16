@@ -510,7 +510,8 @@ async function loadBylawList(root) {
             <td style="font-size:12px;font-family:monospace">${r.city_reference || '—'}</td>
             <td>
               ${r.submitted_to_city
-                ? '<span style="color:var(--success);font-weight:600">✓ Filed</span>'
+                ? `<span style="color:var(--success);font-weight:600">✓ Filed</span>
+                   <button class="btn btn-sm btn-secondary edit-ref" data-id="${r.id}" style="margin-left:6px;font-size:10px">✏️</button>`
                 : `<button class="btn btn-sm btn-secondary mark-filed" data-id="${r.id}">Mark Filed</button>`}
             </td>
           </tr>`).join('')}
@@ -520,6 +521,9 @@ async function loadBylawList(root) {
 
   listEl.querySelectorAll('.mark-filed').forEach(btn => {
     btn.addEventListener('click', () => promptMarkFiled(btn.dataset.id, root));
+  });
+  listEl.querySelectorAll('.edit-ref').forEach(btn => {
+    btn.addEventListener('click', () => promptEditRef(btn.dataset.id, root));
   });
 }
 
@@ -548,6 +552,36 @@ function promptMarkFiled(id, root) {
       await update('bylaw_reports', { id }, { submitted_to_city: true, city_reference: ref });
       closeModal();
       showToast('✓ Marked as filed with City');
+      loadBylawList(root);
+    });
+  });
+}
+
+function promptEditRef(id, root) {
+  const html = `
+    <div class="modal-header">
+      <h2>Edit Confirmation #</h2>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>City Confirmation #</label>
+        <input type="text" id="er-ref" placeholder="e.g. CAS-0895109-C7W6J1" style="font-family:monospace">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Check your email from the City, or paste the UUID from the confirmation page URL.</div>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary" id="er-save">Save</button>
+        <button class="btn btn-secondary" id="er-cancel">Cancel</button>
+      </div>
+    </div>
+  `;
+  openModal(html, box => {
+    box.querySelector('#er-cancel').addEventListener('click', closeModal);
+    box.querySelector('#er-save').addEventListener('click', async () => {
+      const ref = box.querySelector('#er-ref').value.trim() || null;
+      await update('bylaw_reports', { id }, { city_reference: ref });
+      closeModal();
+      showToast('✓ Confirmation number saved');
       loadBylawList(root);
     });
   });
