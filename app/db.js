@@ -1,12 +1,14 @@
 // Supabase REST client with localStorage offline fallback
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { getAuthToken } from './auth.js';
 
 const configured = () => Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
 function headers(extra = {}) {
+  const token = getAuthToken();
   return {
     'apikey': SUPABASE_ANON_KEY,
-    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'Authorization': `Bearer ${token || SUPABASE_ANON_KEY}`,
     'Content-Type': 'application/json',
     ...extra,
   };
