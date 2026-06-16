@@ -12,6 +12,7 @@ const CATEGORIES = [
   'Graffiti',
   'Illegal Parking',
   'Litter or Debris',
+  'Overgrown Vegetation',
   'Pothole',
   'Tree Issue',
   'Vacant Property',
@@ -132,12 +133,38 @@ function subfieldsFor(cat) {
           <input type="text" id="bf-litter-desc" placeholder="e.g. multiple garbage bags, cardboard" required>
         </div>`;
 
+    case 'Overgrown Vegetation':
+      return `
+        <div class="form-group">
+          <label>Type of Vegetation <span class="req">*</span></label>
+          <select id="bf-veg-type" required>
+            <option value="">Select…</option>
+            <option>Grass</option>
+            <option>Weeds</option>
+            <option>Shrubs</option>
+            <option>Mixed</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Property Type <span class="req">*</span></label>
+          <select id="bf-veg-property" required>
+            <option value="">Select…</option>
+            <option>Residential</option>
+            <option>Commercial</option>
+            <option>Industrial</option>
+            <option>Vacant Lot</option>
+          </select>
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin:0 0 8px">
+          Hamilton By-law 10-118: grass and weeds must not exceed 20 cm (8 in).
+        </p>`;
+
     default:
       return '';
   }
 }
 
-const PHOTO_CATS = ['Illegal Dumping', 'Graffiti', 'Illegal Parking', 'Litter or Debris'];
+const PHOTO_CATS = ['Illegal Dumping', 'Graffiti', 'Illegal Parking', 'Litter or Debris', 'Overgrown Vegetation'];
 const photoRequired = cat => cat === 'Illegal Dumping';
 const maxPhotos     = cat => cat === 'Illegal Dumping' ? 5 : 1;
 const hasPhoto      = cat => PHOTO_CATS.includes(cat);
@@ -361,6 +388,15 @@ async function submitBylaw(root, wrap, photos) {
       if (!ld) { err = 'Please describe the litter.'; break; }
       fields.litter_location    = ll;
       fields.litter_description = ld;
+      break;
+    }
+    case 'Overgrown Vegetation': {
+      const vt = wrap.querySelector('#bf-veg-type')?.value;
+      const vp = wrap.querySelector('#bf-veg-property')?.value;
+      if (!vt) { err = 'Please select the type of vegetation.'; break; }
+      if (!vp) { err = 'Please select the property type.'; break; }
+      fields.vegetation_type  = vt;
+      fields.property_type    = vp;
       break;
     }
   }
