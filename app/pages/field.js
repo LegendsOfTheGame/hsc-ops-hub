@@ -339,7 +339,13 @@ async function openGraffitiModal(root) {
         image_url: imageUrl,
         status: 'Pending',
       };
-      await insert('field_logs', row);
+      let { error } = await insert('field_logs', row);
+      if (error) {
+        // Retry without image_url in case the column doesn't exist yet
+        const { error: err2 } = await insert('field_logs', { ...row, image_url: undefined });
+        error = err2;
+      }
+      if (error) { showToast('Failed to save — check connection', 4000); submitBtn.disabled = false; return; }
 
       const countEl = root.querySelector('#count-graffiti');
       const newGraf = parseInt(countEl?.textContent || '0') + 1;
