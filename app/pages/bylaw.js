@@ -1,5 +1,5 @@
 import { select, insert, update } from '../db.js';
-import { showToast, localDateStr } from '../utils.js';
+import { showToast, localDateStr, openModal, closeModal } from '../utils.js';
 
 const IMGBB_KEY = '2972e511acdd923ba33c1bedd2af2ae7';
 const IMGBB_URL = 'https://api.imgbb.com/1/upload';
@@ -497,7 +497,8 @@ async function loadBylawList(root) {
           <th>Date</th>
           <th>Category</th>
           <th>Address</th>
-          <th>Filed with City?</th>
+          <th>City Confirmation #</th>
+          <th>Filed?</th>
         </tr>
       </thead>
       <tbody>
@@ -506,6 +507,7 @@ async function loadBylawList(root) {
             <td style="white-space:nowrap">${r.date || '—'}</td>
             <td>${r.category}</td>
             <td>${r.address}</td>
+            <td style="font-size:12px;font-family:monospace">${r.city_reference || '—'}</td>
             <td>
               ${r.submitted_to_city
                 ? '<span style="color:var(--success);font-weight:600">✓ Filed</span>'
@@ -517,10 +519,35 @@ async function loadBylawList(root) {
   `;
 
   listEl.querySelectorAll('.mark-filed').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      await update('bylaw_reports', { id: btn.dataset.id }, { submitted_to_city: true });
-      showToast('Marked as filed with City');
+    btn.addEventListener('click', () => promptMarkFiled(btn.dataset.id, root));
+  });
+}
+
+function promptMarkFiled(id, root) {
+  const html = `
+    <div class="modal-header">
+      <h2>Mark as Filed</h2>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>City Confirmation # <span style="font-weight:400;font-size:11px">(optional)</span></label>
+        <input type="text" id="mf-ref" placeholder="e.g. CAS-0895109-C7W6J1" style="font-family:monospace">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Check your email from the City, or paste the UUID from the confirmation page URL.</div>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary" id="mf-save">Confirm Filed</button>
+        <button class="btn btn-secondary" id="mf-cancel">Cancel</button>
+      </div>
+    </div>
+  `;
+  openModal(html, box => {
+    box.querySelector('#mf-cancel').addEventListener('click', closeModal);
+    box.querySelector('#mf-save').addEventListener('click', async () => {
+      const ref = box.querySelector('#mf-ref').value.trim() || null;
+      await update('bylaw_reports', { id }, { submitted_to_city: true, city_reference: ref });
+      closeModal();
+      showToast('✓ Marked as filed with City');
       loadBylawList(root);
     });
   });
