@@ -43,6 +43,11 @@ export async function renderField(root) {
         <div class="field-card-label">Graffiti</div>
         <div class="field-card-sub">Log a new tag</div>
       </button>
+      <button class="field-card" id="btn-bylaw">
+        <div class="field-card-icon">⚖️</div>
+        <div class="field-card-label">Bylaw</div>
+        <div class="field-card-sub">Report an offense</div>
+      </button>
     </div>
 
     <div class="card">
@@ -61,6 +66,10 @@ export async function renderField(root) {
 
   root.querySelector('#btn-bag').addEventListener('click', () => openBagModal(root));
   root.querySelector('#btn-graffiti').addEventListener('click', () => openGraffitiModal(root));
+  root.querySelector('#btn-bylaw').addEventListener('click', () => {
+    window.__hscNavigate('bylaw');
+    setTimeout(() => document.getElementById('btn-new-bylaw')?.click(), 50);
+  });
 
   loadFieldHistory(root, today);
   loadCitizenReports(root);
