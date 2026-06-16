@@ -1,8 +1,11 @@
 import { select, insert, update } from '../db.js';
 import { showToast, openModal, closeModal, getGPS, coordsStr, initChips, chipValue, localDateStr, fmtDateTime } from '../utils.js';
 
-const SURFACES  = ['Brick','Metal','Glass','Plastic','Concrete','Wood','Other'];
+const SURFACES   = ['Brick','Metal','Glass','Plastic','Concrete','Wood','Other'];
 const SEVERITIES = ['Minor','Moderate','Major'];
+
+const IMGBB_KEY = '2972e511acdd923ba33c1bedd2af2ae7';
+const IMGBB_URL = 'https://api.imgbb.com/1/upload';
 
 let propertiesCache = null;
 
@@ -215,6 +218,19 @@ async function openGraffitiModal(root) {
         <label>Notes <span style="font-weight:400;font-size:11px">(optional)</span></label>
         <input type="text" id="g-notes" placeholder="e.g. red spray paint, side wall">
       </div>
+      <div class="form-group">
+        <label>Photo <span style="font-weight:400;font-size:11px">(optional)</span></label>
+        <div id="g-photo-area" style="display:flex;align-items:center;gap:10px;margin-top:4px">
+          <label for="g-photo-input" class="btn btn-secondary btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px">
+            📷 Add Photo
+          </label>
+          <input type="file" id="g-photo-input" accept="image/*" capture="environment" style="display:none">
+          <div id="g-photo-preview" hidden style="position:relative;width:64px;height:64px;flex-shrink:0">
+            <img id="g-photo-img" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+            <button id="g-photo-remove" style="position:absolute;top:-6px;right:-6px;background:var(--danger);border:none;color:#fff;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;padding:0">✕</button>
+          </div>
+        </div>
+      </div>
       <div class="btn-group">
         <button class="btn btn-primary" id="g-submit">Log Graffiti</button>
         <button class="btn btn-secondary" id="g-cancel">Cancel</button>
@@ -227,6 +243,32 @@ async function openGraffitiModal(root) {
     initChips(box.querySelector('#g-surface'));
     initChips(box.querySelector('#g-severity'));
     autoGPS(box, '#g-location', '#g-gps', '#g-gps-hint');
+
+    // Photo
+    let photoBase64 = null;
+    const photoInput   = box.querySelector('#g-photo-input');
+    const photoPreview = box.querySelector('#g-photo-preview');
+    const photoImg     = box.querySelector('#g-photo-img');
+
+    photoInput.addEventListener('change', () => {
+      const file = photoInput.files[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) { showToast('Photo too large — max 10 MB'); photoInput.value = ''; return; }
+      const reader = new FileReader();
+      reader.onload = e => {
+        photoBase64 = e.target.result.split(',')[1];
+        photoImg.src = e.target.result;
+        photoPreview.hidden = false;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    box.querySelector('#g-photo-remove').addEventListener('click', () => {
+      photoBase64 = null;
+      photoInput.value = '';
+      photoImg.src = '';
+      photoPreview.hidden = true;
+    });
 
     // Property autocomplete
     let selectedProp = null;
@@ -267,6 +309,22 @@ async function openGraffitiModal(root) {
     });
 
     box.querySelector('#g-submit').addEventListener('click', async () => {
+      const submitBtn = box.querySelector('#g-submit');
+      submitBtn.disabled = true;
+
+      let imageUrl = null;
+      if (photoBase64) {
+        submitBtn.textContent = 'Uploading…';
+        try {
+          const fd = new FormData();
+          fd.append('key', IMGBB_KEY);
+          fd.append('image', photoBase64);
+          const res  = await fetch(IMGBB_URL, { method: 'POST', body: fd });
+          const json = await res.json();
+          if (json.success) imageUrl = json.data.url;
+        } catch { /* skip on failure */ }
+      }
+
       const today = localDateStr();
       const row = {
         type: 'graffiti',
@@ -278,6 +336,7 @@ async function openGraffitiModal(root) {
         surface_type: chipValue(box.querySelector('#g-surface')),
         severity: chipValue(box.querySelector('#g-severity')),
         notes: box.querySelector('#g-notes').value.trim() || null,
+        image_url: imageUrl,
         status: 'Pending',
       };
       await insert('field_logs', row);
