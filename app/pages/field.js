@@ -347,6 +347,17 @@ async function openGraffitiModal(root) {
       }
       if (error) { showToast('Failed to save — check connection', 4000); submitBtn.disabled = false; return; }
 
+      // Also write to graffiti_log for management tracking
+      await insert('graffiti_log', {
+        timestamp:    `${today} 00:00:00`,
+        location:     row.location || '',
+        gps:          row.location || null,
+        status:       'Pending',
+        surface_type: row.surface_type || null,
+        notes:        row.notes || null,
+        image_link:   imageUrl || null,
+      });
+
       const countEl = root.querySelector('#count-graffiti');
       const newGraf = parseInt(countEl?.textContent || '0') + 1;
       if (countEl) countEl.textContent = newGraf;
