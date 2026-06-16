@@ -75,6 +75,15 @@ function applyRole(role) {
 
 const PUNCH_KEY = 'hsc2_punch';
 
+// Round end time to nearest 15-min interval: >6 min past the mark → up, else → down
+function roundToQuarter(date) {
+  const d = new Date(date);
+  const rem = d.getMinutes() % 15;
+  d.setMinutes(rem > 6 ? d.getMinutes() + (15 - rem) : d.getMinutes() - rem);
+  d.setSeconds(0, 0);
+  return d;
+}
+
 function getPunch() {
   try { return JSON.parse(localStorage.getItem(PUNCH_KEY)); } catch { return null; }
 }
@@ -123,7 +132,7 @@ function initPunchClock() {
         date: localDateStr(now),
       }));
     } else {
-      const endTime = new Date();
+      const endTime = roundToQuarter(new Date());
       const ms    = endTime.getTime() - new Date(punch.start).getTime();
       const hours = Math.round((ms / 3600000) * 100) / 100;
       localStorage.removeItem(PUNCH_KEY);

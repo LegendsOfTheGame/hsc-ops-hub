@@ -197,7 +197,7 @@ function showBylawForm(root) {
           <label id="bf-photo-label">Attach Photo</label>
           <div class="photo-grid" id="bf-photo-grid"></div>
           <button type="button" class="btn btn-sm btn-secondary" id="bf-add-photo" style="margin-top:8px">+ Add Photo</button>
-          <input type="file" id="bf-photo-input" accept="image/jpeg,image/png" style="display:none">
+          <input type="file" id="bf-photo-input" accept="image/*" capture="environment" style="display:none">
         </div>
       </div>
 
