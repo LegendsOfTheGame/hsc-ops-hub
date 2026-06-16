@@ -71,8 +71,7 @@ function renderTable(root) {
           location:   report.location || '',
           status:     'Pending',
           image_link: report.image_url || null,
-          notes:      report.description || null,
-          source_ref: report.source_id || null,
+          notes:      `[Citizen Report ${report.source_id || ''}]\n${report.description || ''}`.trim(),
         });
         if (insertErr) {
           showToast('Failed to add to Graffiti Log', 4000);
