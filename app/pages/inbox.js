@@ -61,12 +61,19 @@ function renderTable(root) {
 
   wrap.querySelectorAll('button[data-action]').forEach(btn => {
     btn.addEventListener('click', async () => {
+      btn.disabled = true;
       const newStatus = btn.dataset.action === 'import' ? 'imported' : 'dismissed';
-      await update('incoming_reports', { id: btn.dataset.id }, { status: newStatus });
-      const idx = allReports.findIndex(r => String(r.id) === btn.dataset.id);
-      if (idx !== -1) allReports[idx].status = newStatus;
+      const { error } = await update('incoming_reports', { id: btn.dataset.id }, { status: newStatus });
+      if (error) {
+        showToast('Update failed — check console', 4000);
+        console.error('inbox update error:', error);
+        btn.disabled = false;
+        return;
+      }
+      showToast(newStatus === 'imported' ? '✓ Imported' : '✓ Dismissed');
+      const { data } = await select('incoming_reports', { order: 'sync_timestamp', ascending: false });
+      allReports = data || [];
       renderTable(root);
-      showToast(newStatus === 'imported' ? '✓ Imported to Graffiti Log' : '✓ Dismissed');
     });
   });
 }
