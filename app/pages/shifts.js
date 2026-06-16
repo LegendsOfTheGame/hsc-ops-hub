@@ -1,6 +1,22 @@
 import { select, insert, update, remove } from '../db.js';
 import { showToast, openModal, closeModal, localDateStr, fmtDate } from '../utils.js';
 
+function fmtTime(ts) {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+function toTimeInput(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+function timeInputToISO(date, timeVal) {
+  if (!timeVal) return null;
+  return new Date(`${date}T${timeVal}`).toISOString();
+}
+
 let allShifts = [];
 let fieldByDate = {};
 
@@ -47,10 +63,12 @@ function renderShifts2(root) {
   const totalHours = allShifts.reduce((s, r) => s + (parseFloat(r.hours) || 0), 0);
   wrap.innerHTML = `<div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Season total: <strong style="color:var(--accent)">${totalHours.toFixed(1)} hrs</strong></div>
   <table class="data-table">
-    <thead><tr><th>Date</th><th>Hours</th><th>Field Activity</th><th>Location</th><th>Notes</th><th></th></tr></thead>
+    <thead><tr><th>Date</th><th>Start</th><th>End</th><th>Hours</th><th>Field Activity</th><th>Location</th><th>Notes</th><th></th></tr></thead>
     <tbody>
       ${allShifts.map(r => `<tr>
         <td>${fmtDate(r.date)}</td>
+        <td style="white-space:nowrap">${fmtTime(r.start_time)}</td>
+        <td style="white-space:nowrap">${fmtTime(r.end_time)}</td>
         <td>${r.hours || '—'}</td>
         <td style="font-size:12px;color:var(--text-secondary)">${fieldSummary(r.date)}</td>
         <td style="font-size:12px">${r.location || '—'}</td>
@@ -76,6 +94,10 @@ function shiftForm(rec) {
         <div class="form-group"><label>Date</label><input type="date" id="sh-date" value="${rec?.date || localDateStr()}"></div>
         <div class="form-group"><label>Hours</label><input type="number" id="sh-hours" step="0.25" value="${rec?.hours || ''}"></div>
       </div>
+      <div class="form-row">
+        <div class="form-group"><label>Start Time</label><input type="time" id="sh-start" value="${toTimeInput(rec?.start_time)}"></div>
+        <div class="form-group"><label>End Time</label><input type="time" id="sh-end" value="${toTimeInput(rec?.end_time)}"></div>
+      </div>
       <div class="form-group"><label>Location</label><input type="text" id="sh-loc" value="${rec?.location || ''}" placeholder="e.g. Barton St E"></div>
       <div class="form-group"><label>Notes</label><textarea id="sh-notes" rows="2">${rec?.notes || ''}</textarea></div>
       <div class="btn-group">
@@ -90,7 +112,15 @@ async function mountShiftForm(box, rec, root) {
   const isNew = !rec;
   box.querySelector('#sh-cancel').addEventListener('click', closeModal);
   box.querySelector('#sh-save').addEventListener('click', async () => {
-    const row = { date: box.querySelector('#sh-date').value, hours: parseFloat(box.querySelector('#sh-hours').value) || null, location: box.querySelector('#sh-loc').value.trim() || null, notes: box.querySelector('#sh-notes').value.trim() || null };
+    const date = box.querySelector('#sh-date').value;
+    const row = {
+      date,
+      hours:      parseFloat(box.querySelector('#sh-hours').value) || null,
+      start_time: timeInputToISO(date, box.querySelector('#sh-start').value),
+      end_time:   timeInputToISO(date, box.querySelector('#sh-end').value),
+      location:   box.querySelector('#sh-loc').value.trim() || null,
+      notes:      box.querySelector('#sh-notes').value.trim() || null,
+    };
     if (isNew) { await insert('shifts', row); showToast('✓ Shift logged'); }
     else       { await update('shifts', { id: rec.id }, row); showToast('✓ Updated'); }
     closeModal();

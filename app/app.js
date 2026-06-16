@@ -123,11 +123,18 @@ function initPunchClock() {
         date: localDateStr(now),
       }));
     } else {
-      const ms    = Date.now() - new Date(punch.start).getTime();
+      const endTime = new Date();
+      const ms    = endTime.getTime() - new Date(punch.start).getTime();
       const hours = Math.round((ms / 3600000) * 100) / 100;
       localStorage.removeItem(PUNCH_KEY);
       try {
-        await insert('shifts', { date: punch.date, hours, notes: 'Clocked via punch clock' });
+        await insert('shifts', {
+          date:       punch.date,
+          hours,
+          start_time: punch.start,
+          end_time:   endTime.toISOString(),
+          notes:      'Clocked via punch clock',
+        });
         showToast(`Shift saved — ${hours.toFixed(2)} hrs`);
         navigate('shifts');
       } catch {
