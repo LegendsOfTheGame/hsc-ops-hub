@@ -14,6 +14,7 @@ import { renderInbox }     from './pages/inbox.js';
 import { renderReports }   from './pages/reports.js';
 import { renderEvents }    from './pages/events.js';
 import { renderSettings }  from './pages/settings.js';
+import { renderBylaw }     from './pages/bylaw.js';
 
 const PAGES = {
   home:      renderHome,
@@ -29,12 +30,13 @@ const PAGES = {
   reports:   renderReports,
   events:    renderEvents,
   settings:  renderSettings,
+  bylaw:     renderBylaw,
 };
 
 // ── Roles ─────────────────────────────────────────────────────────────────────
 
 const ROLE_PAGES = {
-  field: ['home', 'field', 'graffiti', 'inventory'],
+  field: ['home', 'field', 'graffiti', 'inventory', 'bylaw'],
   bia:   ['reports'],
 };
 

@@ -1,5 +1,5 @@
-import { select } from '../db.js';
-import { navigate, fmtDate } from '../utils.js';
+import { select, update } from '../db.js';
+import { navigate, fmtDate, showToast } from '../utils.js';
 
 const DAY_NAMES   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -41,6 +41,15 @@ export async function renderHome(root) {
       <div id="attention-body" class="loading">Loading…</div>
     </div>
 
+    <div class="card" id="bylaw-todo-card">
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>Bylaw To-Do <span class="nav-badge" id="bylaw-todo-badge" hidden style="margin-left:6px;position:relative;top:0;transform:none"></span></span>
+        <a href="https://services.my.hamilton.ca/reportaproblem/" target="_blank" rel="noopener"
+           style="font-size:12px;color:var(--accent);text-decoration:none">City Portal ↗</a>
+      </div>
+      <div id="bylaw-todo-body"><div class="loading">Loading…</div></div>
+    </div>
+
     <div class="card">
       <div class="card-title">Social &amp; Tools</div>
       <div class="social-links">
@@ -57,6 +66,7 @@ export async function renderHome(root) {
   // Load data async
   loadStats(root);
   loadWeather(root);
+  loadBylawTodo(root);
 }
 
 function statCard(label, val, sub, target, alert = '') {
@@ -188,4 +198,60 @@ function wmoCond(code) {
   if (code <= 82)  return 'Rain showers';
   if (code <= 86)  return 'Snow showers';
   return 'Thunderstorm';
+}
+
+async function loadBylawTodo(root) {
+  const body  = root.querySelector('#bylaw-todo-body');
+  const badge = root.querySelector('#bylaw-todo-badge');
+  if (!body) return;
+
+  const { data } = await select('bylaw_reports', { order: 'created_at', ascending: true });
+  const pending = (data || []).filter(r => !r.submitted_to_city);
+
+  if (badge) {
+    badge.textContent = pending.length;
+    badge.hidden = pending.length === 0;
+  }
+
+  if (!pending.length) {
+    body.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:#22c55e;font-size:13px;padding:4px 0"><span>✓</span><span>All bylaw reports filed with the City.</span></div>`;
+    return;
+  }
+
+  body.innerHTML = pending.map(r => {
+    const detail = bylawDetailLine(r);
+    return `
+      <div class="bylaw-todo-row" data-id="${r.id}">
+        <div class="bylaw-todo-check">☐</div>
+        <div class="bylaw-todo-info">
+          <div class="bylaw-todo-cat">${r.category}</div>
+          <div class="bylaw-todo-addr">${r.address}</div>
+          ${detail ? `<div class="bylaw-todo-detail">${detail}</div>` : ''}
+          <div class="bylaw-todo-date">${r.date || ''}</div>
+        </div>
+        <button class="btn btn-sm btn-secondary bylaw-mark-filed" data-id="${r.id}">Mark Filed</button>
+      </div>
+    `;
+  }).join('');
+
+  body.querySelectorAll('.bylaw-mark-filed').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.textContent = '…';
+      await update('bylaw_reports', { id: btn.dataset.id }, { submitted_to_city: true });
+      showToast('✓ Marked as filed with City');
+      loadBylawTodo(root);
+    });
+  });
+}
+
+function bylawDetailLine(r) {
+  const f = r.fields || {};
+  if (f.vehicle) return `${f.vehicle.colour} ${f.vehicle.make} ${f.vehicle.model} · ${f.vehicle.plate}`;
+  if (f.animal_type) return f.animal_type;
+  if (f.waste_types?.length) return f.waste_types.join(', ');
+  if (f.graffiti_location) return f.graffiti_location;
+  if (f.litter_location) return f.litter_location;
+  if (f.property_type) return f.property_type;
+  return '';
 }
