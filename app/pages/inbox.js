@@ -36,13 +36,18 @@ function renderTable(root) {
   if (!filtered.length) { wrap.innerHTML = `<div class="empty-state"><div class="icon">📥</div>No reports${statusF === 'pending' ? ' pending' : ''}.</div>`; return; }
 
   wrap.innerHTML = `<table class="data-table">
-    <thead><tr><th>Date</th><th>Source</th><th>Location</th><th>Description</th><th>Status</th><th>Actions</th></tr></thead>
+    <thead><tr><th>Date</th><th>Source</th><th>Location</th><th>Description</th><th>Photo</th><th>Status</th><th>Actions</th></tr></thead>
     <tbody>
       ${filtered.map(r => `<tr>
         <td style="white-space:nowrap">${fmtDateTime(r.sync_timestamp || r.date)}</td>
         <td><span class="badge ${r.source === 'appsheet' ? 'badge-accent' : 'badge-info'}">${r.source || '—'}</span></td>
         <td style="font-size:12px">${r.location || '—'}</td>
         <td style="font-size:12px;max-width:200px">${r.description || '—'}</td>
+        <td>${r.image_url
+          ? `<a href="${r.image_url}" target="_blank" rel="noopener" title="View photo">
+               <img src="${r.image_url}" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--border);display:block">
+             </a>`
+          : '<span style="color:var(--text-muted);font-size:12px">—</span>'}</td>
         <td><span class="badge ${statusClass(r.status)}">${r.status}</span></td>
         <td>
           ${r.status === 'pending' ? `

@@ -383,6 +383,9 @@ async function loadCitizenReports(root) {
   wrap.innerHTML = reports.map(r => {
     const firstLine = (r.description || '').split('\n')[0] || '—';
     return `<div class="citizen-report-row" data-id="${r.id}">
+      ${r.image_url ? `<a href="${r.image_url}" target="_blank" rel="noopener" style="flex-shrink:0">
+        <img src="${r.image_url}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+      </a>` : ''}
       <div class="cr-main">
         <div class="cr-location">${r.location || '—'}</div>
         <div class="cr-desc">${firstLine}</div>
