@@ -63,12 +63,17 @@ function renderTable(root) {
 
   wrap.innerHTML = `<table class="data-table">
     <thead><tr>
-      <th>Date</th><th>Location</th><th>Status</th><th>Owner</th><th>Surface</th><th>Difficulty</th><th>Notes</th><th></th>
+      <th>Date</th><th>Location</th><th>Photo</th><th>Status</th><th>Owner</th><th>Surface</th><th>Difficulty</th><th>Notes</th><th></th>
     </tr></thead>
     <tbody>
       ${filtered.map(r => `<tr>
         <td style="white-space:nowrap">${fmtDate(r.timestamp)}</td>
         <td>${r.location || '—'}</td>
+        <td>${r.image_link
+          ? `<a href="${r.image_link}" target="_blank" rel="noopener">
+               <img src="${r.image_link}" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--border);display:block">
+             </a>`
+          : '<span style="color:var(--text-muted);font-size:12px">—</span>'}</td>
         <td>${statusBadge(r.status)}</td>
         <td style="font-size:12px;color:var(--text-secondary)">${r.owner || '—'}</td>
         <td style="font-size:12px">${r.surface_type || '—'}</td>
