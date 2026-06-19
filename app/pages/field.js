@@ -34,8 +34,8 @@ export async function renderField(root) {
         <div class="lbl">graffiti today</div>
       </div>
       <div class="session-stat">
-        <div class="num" id="count-supplies">${todaySaved.supplies}</div>
-        <div class="lbl">supply uses</div>
+        <div class="num" id="count-supplies">$${(todaySaved.supplies || 0).toFixed(2)}</div>
+        <div class="lbl">supply cost</div>
       </div>
     </div>
 
@@ -169,7 +169,7 @@ function openBagModal(root) {
       const newBags = parseInt(countEl?.textContent || '0') + 1;
       if (countEl) countEl.textContent = newBags;
       const graffiti  = parseInt(root.querySelector('#count-graffiti')?.textContent || '0');
-      const supplies  = parseInt(root.querySelector('#count-supplies')?.textContent || '0');
+      const supplies  = parseFloat(root.querySelector('#count-supplies')?.textContent?.replace('$','') || '0');
       saveCount(today, newBags, graffiti, supplies);
 
       closeModal();
@@ -373,7 +373,7 @@ async function openGraffitiModal(root) {
       const newGraf = parseInt(countEl?.textContent || '0') + 1;
       if (countEl) countEl.textContent = newGraf;
       const bags     = parseInt(root.querySelector('#count-bags')?.textContent || '0');
-      const supplies = parseInt(root.querySelector('#count-supplies')?.textContent || '0');
+      const supplies = parseFloat(root.querySelector('#count-supplies')?.textContent?.replace('$','') || '0');
       saveCount(today, bags, newGraf, supplies);
 
       closeModal();
@@ -475,9 +475,11 @@ async function openSupplyModal(root) {
         notes:      notes || null,
       });
 
+      const cost     = parseFloat(opt?.dataset.cost || 0) * qty;
       const countEl  = root.querySelector('#count-supplies');
-      const newSup   = parseInt(countEl?.textContent || '0') + 1;
-      if (countEl) countEl.textContent = newSup;
+      const curSup   = parseFloat(countEl?.textContent?.replace('$','') || '0');
+      const newSup   = curSup + cost;
+      if (countEl) countEl.textContent = '$' + newSup.toFixed(2);
       const bags     = parseInt(root.querySelector('#count-bags')?.textContent || '0');
       const graffiti = parseInt(root.querySelector('#count-graffiti')?.textContent || '0');
       saveCount(today, bags, graffiti, newSup);
