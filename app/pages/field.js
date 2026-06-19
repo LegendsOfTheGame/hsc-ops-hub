@@ -18,7 +18,6 @@ async function loadProperties() {
 
 export async function renderField(root) {
   const today = localDateStr();
-  const todaySaved = JSON.parse(localStorage.getItem(`hsc2_field_today_${today}`) || '{"bags":0,"graffiti":0,"supplies":0}');
 
   root.innerHTML = `
     <div class="page-title">Field Log</div>
@@ -26,15 +25,15 @@ export async function renderField(root) {
 
     <div class="session-summary">
       <div class="session-stat">
-        <div class="num" id="count-bags">${todaySaved.bags}</div>
+        <div class="num" id="count-bags">–</div>
         <div class="lbl">bags today</div>
       </div>
       <div class="session-stat">
-        <div class="num" id="count-graffiti">${todaySaved.graffiti}</div>
+        <div class="num" id="count-graffiti">–</div>
         <div class="lbl">graffiti today</div>
       </div>
       <div class="session-stat">
-        <div class="num" id="count-supplies">$${(todaySaved.supplies || 0).toFixed(2)}</div>
+        <div class="num" id="count-supplies">–</div>
         <div class="lbl">supply cost</div>
       </div>
     </div>
@@ -88,15 +87,27 @@ export async function renderField(root) {
   loadCitizenReports(root);
 }
 
-function saveCount(today, bags, graffiti, supplies) {
-  localStorage.setItem(`hsc2_field_today_${today}`, JSON.stringify({ bags, graffiti, supplies }));
-}
 
 async function loadFieldHistory(root, today) {
   const { data } = await select('field_logs', { filter: { date: today }, order: 'logged_at', ascending: false });
+  const rows = data || [];
+
+  // Compute counters from DB
+  let bags = 0, graffiti = 0, supplyCost = 0;
+  for (const r of rows) {
+    if (r.type === 'bag_drop') bags++;
+    else if (r.type === 'graffiti') graffiti++;
+    else if (r.type === 'supply_use') supplyCost += parseFloat(r.supply_cost) || 0;
+  }
+  const bagEl = root.querySelector('#count-bags');
+  const grafEl = root.querySelector('#count-graffiti');
+  const supEl = root.querySelector('#count-supplies');
+  if (bagEl) bagEl.textContent = bags;
+  if (grafEl) grafEl.textContent = graffiti;
+  if (supEl) supEl.textContent = '$' + supplyCost.toFixed(2);
+
   const hist = root.querySelector('#field-history');
   if (!hist) return;
-  const rows = data || [];
   if (!rows.length) { hist.innerHTML = '<div class="empty-state">Nothing logged yet today.</div>'; return; }
 
   hist.innerHTML = `<table class="data-table">
@@ -164,14 +175,6 @@ function openBagModal(root) {
         notes: box.querySelector('#bag-notes').value.trim() || null,
       };
       await insert('field_logs', row);
-
-      const countEl = root.querySelector('#count-bags');
-      const newBags = parseInt(countEl?.textContent || '0') + 1;
-      if (countEl) countEl.textContent = newBags;
-      const graffiti  = parseInt(root.querySelector('#count-graffiti')?.textContent || '0');
-      const supplies  = parseFloat(root.querySelector('#count-supplies')?.textContent?.replace('$','') || '0');
-      saveCount(today, newBags, graffiti, supplies);
-
       closeModal();
       showToast('✓ Bag drop logged');
       loadFieldHistory(root, today);
@@ -369,13 +372,6 @@ async function openGraffitiModal(root) {
         image_link:   imageUrl || null,
       });
 
-      const countEl = root.querySelector('#count-graffiti');
-      const newGraf = parseInt(countEl?.textContent || '0') + 1;
-      if (countEl) countEl.textContent = newGraf;
-      const bags     = parseInt(root.querySelector('#count-bags')?.textContent || '0');
-      const supplies = parseFloat(root.querySelector('#count-supplies')?.textContent?.replace('$','') || '0');
-      saveCount(today, bags, newGraf, supplies);
-
       closeModal();
       showToast('✓ Graffiti logged');
       loadFieldHistory(root, today);
@@ -452,14 +448,19 @@ async function openSupplyModal(root) {
       if (qty > curStock) { showToast(`Only ${curStock} in stock`); return; }
 
       const today = localDateStr();
+      const unitCost = parseFloat(opt?.dataset.cost || 0);
+      const totalCost = unitCost * qty;
 
       // Write to field_logs so it appears in today's history
-      await insert('field_logs', {
+      const logRow = {
         type:      'supply_use',
         logged_at: new Date().toISOString(),
         date:      today,
         notes:     notes ? `${itemName} ×${qty} — ${notes}` : `${itemName} ×${qty}`,
-      });
+        supply_cost: totalCost,
+      };
+      let { error: logErr } = await insert('field_logs', logRow);
+      if (logErr) await insert('field_logs', { ...logRow, supply_cost: undefined });
 
       // Decrement stock
       await update('inventory_items', { id: itemId }, { quantity: curStock - qty });
@@ -475,17 +476,8 @@ async function openSupplyModal(root) {
         notes:      notes || null,
       });
 
-      const cost     = parseFloat(opt?.dataset.cost || 0) * qty;
-      const countEl  = root.querySelector('#count-supplies');
-      const curSup   = parseFloat(countEl?.textContent?.replace('$','') || '0');
-      const newSup   = curSup + cost;
-      if (countEl) countEl.textContent = '$' + newSup.toFixed(2);
-      const bags     = parseInt(root.querySelector('#count-bags')?.textContent || '0');
-      const graffiti = parseInt(root.querySelector('#count-graffiti')?.textContent || '0');
-      saveCount(today, bags, graffiti, newSup);
-
       closeModal();
-      showToast(`✓ Logged ${qty} × ${itemName}`);
+      showToast(`✓ Logged ${qty} × ${itemName} ($${totalCost.toFixed(2)})`);
       loadFieldHistory(root, today);
     });
   });
