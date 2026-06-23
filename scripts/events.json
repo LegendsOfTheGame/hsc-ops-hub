@@ -1,0 +1,238 @@
+{
+  "public_holidays_2026": [
+    {
+      "name": "New Year",
+      "date": "2026-01-01",
+      "weekday": "Thursday"
+    },
+    {
+      "name": "Good Friday",
+      "date": "2026-04-03",
+      "weekday": "Friday"
+    },
+    {
+      "name": "Easter Monday",
+      "date": "2026-04-06",
+      "weekday": "Monday"
+    },
+    {
+      "name": "Victoria Day",
+      "date": "2026-05-18",
+      "weekday": "Monday"
+    },
+    {
+      "name": "Saint-Jean-Baptiste Day",
+      "date": "2026-06-24",
+      "weekday": "Wednesday",
+      "note": "Quebec only"
+    },
+    {
+      "name": "Canada Day",
+      "date": "2026-07-01",
+      "weekday": "Wednesday"
+    },
+    {
+      "name": "Civic Holiday",
+      "date": "2026-08-03",
+      "weekday": "Monday",
+      "note": "excluding Quebec"
+    },
+    {
+      "name": "Labour Day",
+      "date": "2026-09-07",
+      "weekday": "Monday"
+    },
+    {
+      "name": "National Day for Truth and Reconciliation",
+      "date": "2026-09-30",
+      "weekday": "Wednesday"
+    },
+    {
+      "name": "Thanksgiving Day",
+      "date": "2026-10-12",
+      "weekday": "Monday"
+    },
+    {
+      "name": "Remembrance Day",
+      "date": "2026-11-11",
+      "weekday": "Wednesday"
+    },
+    {
+      "name": "Christmas Day",
+      "date": "2026-12-25",
+      "weekday": "Friday"
+    },
+    {
+      "name": "Boxing Day",
+      "date": "2026-12-26",
+      "weekday": "Saturday"
+    }
+  ],
+  "tasty_tuesdays_2026": [
+    {"date": "2026-06-02"},
+    {"date": "2026-07-07"},
+    {"date": "2026-08-04"},
+    {"date": "2026-09-01"},
+    {"date": "2026-10-06"}
+  ],
+  "tasty_tuesday_details": {
+    "location": "643 Barton St E at Earl",
+    "time": "2PM–6PM",
+    "instagram_tags": "@barton_village #TastyTuesday"
+  },
+
+  "hamilton_major_events_2026_projected": [
+    {
+      "name": "Barton BASH",
+      "date": "2026-06-13",
+      "weekday": "Saturday",
+      "sponsor_slot": true,
+      "tagline": "Barton Village Block Party",
+      "instagram_tags": "@barton_village @bartonfestival",
+      "notes": "Annual BIA block party on Barton St — HSC home turf"
+    },
+    {
+      "name": "Sew Hungry",
+      "date": "2026-05-09",
+      "weekday": "Saturday",
+      "sponsor_slot": true,
+      "tagline": "Ottawa Street Market Festival",
+      "instagram_tags": "@ottawastbia",
+      "notes": "Ottawa Street BIA annual event — 2026 date: May 9 (already passed)"
+    },
+    {
+      "name": "Halloween Haunt",
+      "date": "2026-10-31",
+      "weekday": "Saturday",
+      "sponsor_slot": true,
+      "tagline": "Ottawa Street Halloween",
+      "instagram_tags": "@ottawastbia",
+      "notes": "Ottawa Street BIA Halloween event — treat same as BASH/KWF"
+    },
+    {
+      "name": "King William Fest",
+      "date": "2026-09-05",
+      "weekday": "Saturday",
+      "sponsor_slot": true,
+      "tagline": "King William St Festival",
+      "instagram_tags": "@kingwilliamfest",
+      "notes": "First Saturday after McMaster Welcome Week ends (Sept 4) — 2026 date: Sept 5"
+    },
+    {
+      "name": "Spring Discovery Days (Gage Park Greenhouse)",
+      "start_date": "2026-03-14",
+      "end_date": "2026-03-22",
+      "weekday_pattern": "Saturday to Sunday",
+      "notes": "Seasonal spring event"
+    },
+    {
+      "name": "Doors Open Hamilton",
+      "start_date": "2026-05-02",
+      "end_date": "2026-05-03",
+      "weekday_pattern": "Weekend",
+      "notes": "Historic buildings open to public (annual early May)"
+    },
+    {
+      "name": "FrancoFEST Hamilton",
+      "start_date": "2026-06-19",
+      "end_date": "2026-06-21",
+      "weekday_pattern": "Friday to Sunday",
+      "notes": "Francophone cultural festival"
+    },
+    {
+      "name": "Something Else! Festival",
+      "start_date": "2026-06-18",
+      "end_date": "2026-06-21",
+      "weekday_pattern": "Thursday to Sunday",
+      "notes": "Music and arts festival"
+    },
+    {
+      "name": "It’s Your Festival (Canada Day Festival)",
+      "start_date": "2026-06-27",
+      "end_date": "2026-07-01",
+      "weekday_pattern": "Saturday to Wednesday",
+      "notes": "Major Canada Day celebration at Gage Park"
+    },
+    {
+      "name": "Canada Day at Bayfront Park",
+      "date": "2026-07-01",
+      "weekday": "Wednesday",
+      "notes": "Fireworks and city celebration"
+    },
+    {
+      "name": "Dundas Cactus Festival",
+      "start_date": "2026-08-21",
+      "end_date": "2026-08-23",
+      "weekday_pattern": "Friday to Sunday",
+      "notes": "One of Hamilton’s largest street festivals"
+    },
+    {
+      "name": "Winona Peach Festival",
+      "start_date": "2026-08-28",
+      "end_date": "2026-08-30",
+      "weekday_pattern": "Friday to Sunday",
+      "notes": "Annual late-summer food festival"
+    },
+    {
+      "name": "Supercrawl",
+      "start_date": "2026-09-11",
+      "end_date": "2026-09-13",
+      "weekday_pattern": "Friday to Sunday",
+      "notes": "Major arts + culture street festival (James St N)"
+    },
+    {
+      "name": "Hamilton Day",
+      "start_date": "2026-10-30",
+      "end_date": "2026-11-01",
+      "weekday_pattern": "Friday to Sunday",
+      "notes": "City-wide local business and culture event (first weekend of November)"
+    }
+  ],
+
+  "forge_fc_home_2026": {
+    "venue": "Tim Hortons Field, Hamilton",
+    "instagram_tags": "@forgefc @canpl #ForgeFC #HamOnt",
+    "notes": "14 home games. Schedule via CPL ICS feed.",
+    "games": [
+      {"date": "2026-04-04", "weekday": "Saturday", "opponent": "Atlético Ottawa", "notes": "Home opener — rematch of 2025 Contender Semi-Final"},
+      {"date": "2026-05-31", "weekday": "Sunday", "opponent": "Cavalry FC"},
+      {"date": "2026-06-07", "weekday": "Sunday", "opponent": "Inter Toronto", "notes": "905 Derby"},
+      {"date": "2026-06-10", "weekday": "Wednesday", "opponent": "HFX Wanderers", "time": "7:00 PM EDT", "notes": "Special CPL celebration match — FIFA World Cup kickoff eve"},
+      {"date": "2026-07-01", "weekday": "Wednesday", "opponent": "Vancouver FC", "time": "1:00 PM EDT", "notes": "Canada Day match"},
+      {"date": "2026-07-16", "weekday": "Thursday", "opponent": "Pacific FC", "time": "7:00 PM EDT"},
+      {"date": "2026-08-07", "weekday": "Friday", "opponent": "Vancouver FC", "time": "7:00 PM EDT"},
+      {"date": "2026-08-19", "weekday": "Wednesday", "opponent": "Supra du Québec", "time": "7:00 PM EDT"},
+      {"date": "2026-08-22", "weekday": "Saturday", "opponent": "Pacific FC", "time": "7:00 PM EDT"},
+      {"date": "2026-09-05", "weekday": "Saturday", "opponent": "Inter Toronto", "time": "7:00 PM EDT"},
+      {"date": "2026-09-12", "weekday": "Saturday", "opponent": "Atlético Ottawa", "time": "7:00 PM EDT"},
+      {"date": "2026-10-03", "weekday": "Saturday", "opponent": "HFX Wanderers", "time": "4:00 PM EDT"},
+      {"date": "2026-10-12", "weekday": "Monday", "opponent": "Inter Toronto", "time": "1:00 PM EDT", "notes": "Thanksgiving Monday"},
+      {"date": "2026-10-25", "weekday": "Sunday", "opponent": "TBD", "notes": "Regular season finale — 'The Outcome'"}
+    ]
+  },
+
+  "ticats_home_2026": {
+    "venue": "Tim Hortons Field, Hamilton",
+    "instagram_tags": "@ticats @CFL #Ticats #HamOnt",
+    "notes": "10 home games. Sources: ticats.ca/schedule/2026",
+    "games": [
+      {"date": "2026-06-04", "weekday": "Thursday", "opponent": "Montreal Alouettes", "time": "7:30 PM EDT", "notes": "Home opener — rematch of 2025 Eastern Final"},
+      {"date": "2026-06-19", "weekday": "Friday", "opponent": "BC Lions", "time": "7:30 PM EDT"},
+      {"date": "2026-07-05", "weekday": "Sunday", "opponent": "Winnipeg Blue Bombers", "time": "7:00 PM EDT"},
+      {"date": "2026-07-18", "weekday": "Saturday", "opponent": "Toronto Argonauts", "time": "7:00 PM EDT", "notes": "Extra home game — Argos' stadium in use for FIFA World Cup"},
+      {"date": "2026-08-01", "weekday": "Saturday", "opponent": "Calgary Stampeders", "time": "3:00 PM EDT"},
+      {"date": "2026-08-15", "weekday": "Saturday", "opponent": "Saskatchewan Roughriders", "time": "7:00 PM EDT"},
+      {"date": "2026-09-07", "weekday": "Monday", "opponent": "Toronto Argonauts", "notes": "Labour Day Classic"},
+      {"date": "2026-09-18", "weekday": "Friday", "opponent": "Montreal Alouettes", "time": "7:30 PM EDT"},
+      {"date": "2026-10-09", "weekday": "Friday", "opponent": "Edmonton Elks", "time": "7:00 PM EDT"},
+      {"date": "2026-10-24", "weekday": "Saturday", "opponent": "Ottawa REDBLACKS", "time": "3:00 PM EDT"}
+    ]
+  },
+
+  "pwhl_hamilton_2026_27": {
+    "venue": "TD Coliseum (FirstOntario Centre), Hamilton",
+    "instagram_tags": "@PWHLHamilton @thepwhl #PWHLHamilton #HamOnt",
+    "notes": "PWHL expansion team — inaugural 2026-27 season. Team name/logo TBA. Colours: gold, maroon, cream. Schedule expected ~October 1, 2026 (based on prior year). First game estimated ~November 13, 2026. Update games array when schedule drops.",
+    "games": []
+  }
+}
