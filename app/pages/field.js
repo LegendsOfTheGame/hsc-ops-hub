@@ -18,7 +18,6 @@ async function loadProperties() {
 
 export async function renderField(root) {
   const today = localDateStr();
-  const todaySaved = JSON.parse(localStorage.getItem(`hsc2_field_today_${today}`) || '{"bags":0,"graffiti":0}');
 
   root.innerHTML = `
     <div class="page-title">Field Log</div>
@@ -26,12 +25,16 @@ export async function renderField(root) {
 
     <div class="session-summary">
       <div class="session-stat">
-        <div class="num" id="count-bags">${todaySaved.bags}</div>
+        <div class="num" id="count-bags">–</div>
         <div class="lbl">bags today</div>
       </div>
       <div class="session-stat">
-        <div class="num" id="count-graffiti">${todaySaved.graffiti}</div>
+        <div class="num" id="count-graffiti">–</div>
         <div class="lbl">graffiti today</div>
+      </div>
+      <div class="session-stat">
+        <div class="num" id="count-supplies">–</div>
+        <div class="lbl">supply cost</div>
       </div>
     </div>
 
@@ -45,6 +48,11 @@ export async function renderField(root) {
         <div class="field-card-icon">🚨</div>
         <div class="field-card-label">Graffiti</div>
         <div class="field-card-sub">Log a new tag</div>
+      </button>
+      <button class="field-card" id="btn-supply">
+        <div class="field-card-icon">🧴</div>
+        <div class="field-card-label">Use Supply</div>
+        <div class="field-card-sub">Log supply used</div>
       </button>
       <button class="field-card" id="btn-bylaw">
         <div class="field-card-icon">⚖️</div>
@@ -69,6 +77,7 @@ export async function renderField(root) {
 
   root.querySelector('#btn-bag').addEventListener('click', () => openBagModal(root));
   root.querySelector('#btn-graffiti').addEventListener('click', () => openGraffitiModal(root));
+  root.querySelector('#btn-supply').addEventListener('click', () => openSupplyModal(root));
   root.querySelector('#btn-bylaw').addEventListener('click', () => {
     window.__hscNavigate('bylaw');
     setTimeout(() => document.getElementById('btn-new-bylaw')?.click(), 50);
@@ -78,15 +87,27 @@ export async function renderField(root) {
   loadCitizenReports(root);
 }
 
-function saveCount(today, bags, graffiti) {
-  localStorage.setItem(`hsc2_field_today_${today}`, JSON.stringify({ bags, graffiti }));
-}
 
 async function loadFieldHistory(root, today) {
   const { data } = await select('field_logs', { filter: { date: today }, order: 'logged_at', ascending: false });
+  const rows = data || [];
+
+  // Compute counters from DB
+  let bags = 0, graffiti = 0, supplyCost = 0;
+  for (const r of rows) {
+    if (r.type === 'bag_drop') bags++;
+    else if (r.type === 'graffiti') graffiti++;
+    else if (r.type === 'supply_use') supplyCost += parseFloat(r.supply_cost) || 0;
+  }
+  const bagEl = root.querySelector('#count-bags');
+  const grafEl = root.querySelector('#count-graffiti');
+  const supEl = root.querySelector('#count-supplies');
+  if (bagEl) bagEl.textContent = bags;
+  if (grafEl) grafEl.textContent = graffiti;
+  if (supEl) supEl.textContent = '$' + supplyCost.toFixed(2);
+
   const hist = root.querySelector('#field-history');
   if (!hist) return;
-  const rows = data || [];
   if (!rows.length) { hist.innerHTML = '<div class="empty-state">Nothing logged yet today.</div>'; return; }
 
   hist.innerHTML = `<table class="data-table">
@@ -94,7 +115,7 @@ async function loadFieldHistory(root, today) {
     <tbody>
       ${rows.map(r => `<tr>
         <td style="white-space:nowrap">${fmtDateTime(r.logged_at)}</td>
-        <td>${r.type === 'bag_drop' ? '🗑️ Bag' : '🚨 Graffiti'}</td>
+        <td>${r.type === 'bag_drop' ? '🗑️ Bag' : r.type === 'supply_use' ? '🧴 Supply' : '🚨 Graffiti'}</td>
         <td>${r.property_name || r.location || '—'}</td>
         <td style="color:var(--text-muted)">${r.notes || '—'}</td>
       </tr>`).join('')}
@@ -154,13 +175,6 @@ function openBagModal(root) {
         notes: box.querySelector('#bag-notes').value.trim() || null,
       };
       await insert('field_logs', row);
-
-      const countEl = root.querySelector('#count-bags');
-      const newBags = parseInt(countEl?.textContent || '0') + 1;
-      if (countEl) countEl.textContent = newBags;
-      const graffiti = parseInt(root.querySelector('#count-graffiti')?.textContent || '0');
-      saveCount(today, newBags, graffiti);
-
       closeModal();
       showToast('✓ Bag drop logged');
       loadFieldHistory(root, today);
@@ -358,14 +372,112 @@ async function openGraffitiModal(root) {
         image_link:   imageUrl || null,
       });
 
-      const countEl = root.querySelector('#count-graffiti');
-      const newGraf = parseInt(countEl?.textContent || '0') + 1;
-      if (countEl) countEl.textContent = newGraf;
-      const bags = parseInt(root.querySelector('#count-bags')?.textContent || '0');
-      saveCount(today, bags, newGraf);
-
       closeModal();
       showToast('✓ Graffiti logged');
+      loadFieldHistory(root, today);
+    });
+  });
+}
+
+// ── Supply use modal ─────────────────────────────────────────────────────────
+
+async function openSupplyModal(root) {
+  const { data } = await select('inventory_items', { order: 'name', ascending: true });
+  const items = (data || []).filter(i => parseFloat(i.quantity) > 0);
+
+  const options = items.length
+    ? items.map(i => `<option value="${i.id}" data-name="${i.name}" data-qty="${parseFloat(i.quantity || 0).toFixed(2)}" data-cost="${parseFloat(i.weighted_avg_cost || i.unit_cost || 0).toFixed(2)}">${i.name} (${parseFloat(i.quantity || 0)} in stock)</option>`).join('')
+    : '<option value="" disabled>No items in stock</option>';
+
+  const html = `
+    <div class="modal-header">
+      <h2>🧴 Use Supply</h2>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Item Used</label>
+        <select id="sup-item">${options}</select>
+      </div>
+      <div class="form-group">
+        <label>Quantity Used</label>
+        <input type="number" id="sup-qty" min="0.01" step="0.01" placeholder="e.g. 0.5">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px" id="sup-cost-hint"></div>
+      </div>
+      <div class="form-group">
+        <label>Notes <span style="font-weight:400;font-size:11px">(optional)</span></label>
+        <input type="text" id="sup-notes" placeholder="e.g. graffiti removal at 247 Barton E">
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary" id="sup-submit"${!items.length ? ' disabled' : ''}>Log Usage</button>
+        <button class="btn btn-secondary" id="sup-cancel">Cancel</button>
+      </div>
+    </div>
+  `;
+
+  openModal(html, box => {
+    box.querySelector('#sup-cancel').addEventListener('click', closeModal);
+
+    const sel     = box.querySelector('#sup-item');
+    const qtyEl   = box.querySelector('#sup-qty');
+    const hint    = box.querySelector('#sup-cost-hint');
+
+    function updateHint() {
+      const opt  = sel.selectedOptions[0];
+      const cost = parseFloat(opt?.dataset.cost || 0);
+      const qty  = parseFloat(qtyEl.value) || 0;
+      if (cost > 0 && qty > 0) hint.textContent = `Est. cost: $${(cost * qty).toFixed(2)}`;
+      else hint.textContent = '';
+    }
+
+    sel.addEventListener('change', updateHint);
+    qtyEl.addEventListener('input', updateHint);
+
+    box.querySelector('#sup-submit').addEventListener('click', async () => {
+      const opt      = sel.selectedOptions[0];
+      const itemId   = sel.value;
+      const itemName = opt?.dataset.name || '';
+      const qty      = parseFloat(qtyEl.value) || 0;
+      const notes    = box.querySelector('#sup-notes').value.trim();
+
+      if (!itemId)    { showToast('Select an item'); return; }
+      if (qty <= 0)   { showToast('Enter a positive quantity'); return; }
+
+      const item     = items.find(i => String(i.id) === itemId);
+      const curStock = parseFloat(item?.quantity || 0);
+      if (qty > curStock) { showToast(`Only ${curStock} in stock`); return; }
+
+      const today = localDateStr();
+      const unitCost = parseFloat(opt?.dataset.cost || 0);
+      const totalCost = unitCost * qty;
+
+      // Write to field_logs so it appears in today's history
+      const logRow = {
+        type:      'supply_use',
+        logged_at: new Date().toISOString(),
+        date:      today,
+        notes:     notes ? `${itemName} ×${qty} — ${notes}` : `${itemName} ×${qty}`,
+        supply_cost: totalCost,
+      };
+      let { error: logErr } = await insert('field_logs', logRow);
+      if (logErr) await insert('field_logs', { ...logRow, supply_cost: undefined });
+
+      // Decrement stock
+      await update('inventory_items', { id: itemId }, { quantity: curStock - qty });
+
+      // Write to inventory_log for detailed tracking
+      await insert('inventory_log', {
+        item_id:    itemId,
+        item_name:  itemName,
+        change_type: 'usage',
+        quantity:   -qty,
+        date:       today,
+        logged_at:  new Date().toISOString(),
+        notes:      notes || null,
+      });
+
+      closeModal();
+      showToast(`✓ Logged ${qty} × ${itemName} ($${totalCost.toFixed(2)})`);
       loadFieldHistory(root, today);
     });
   });
