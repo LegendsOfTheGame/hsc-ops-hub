@@ -44,11 +44,20 @@ MODEL_CHAIN = [
 IMGBB_API_URL = "https://api.imgbb.com/1/upload"
 
 # --- Buffer channels ---
-BUFFER_CHANNELS = [
+# Account 1: Meta platforms
+BUFFER_CHANNELS_1 = [
     {"id": "69e918b9031bfa423c30d15a", "name": "hammerstreetclean (Instagram)", "facebook": False},
-    {"id": "685288970530b816c256ca89", "name": "HammerStrClean (X/Twitter)", "facebook": False},
     {"id": "6852897e0530b816c263bd41", "name": "Hamilton Street Clean (Facebook)", "facebook": True},
+    {"id": "6a3936d35ab6d2f1065c41e6", "name": "Hamilton Street Clean (Threads)", "facebook": True},
 ]
+
+# Account 2: Alt/Decentralized platforms
+BUFFER_CHANNELS_2 = [
+    {"id": "6a3936465ab6d2f1065c3f5b", "name": "HammerStrClean (X/Twitter)", "facebook": False},
+    {"id": "6a39351e5ab6d2f1065c395c", "name": "Hammer Street Clean (Bluesky)", "facebook": False},
+]
+
+BUFFER_CHANNELS = BUFFER_CHANNELS_1 + BUFFER_CHANNELS_2
 
 LAT, LON = 43.2501, -79.8496
 
