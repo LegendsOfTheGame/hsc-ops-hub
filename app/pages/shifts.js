@@ -1,5 +1,6 @@
 import { select, insert, update, remove } from '../db.js';
 import { showToast, openModal, closeModal, localDateStr, fmtDate } from '../utils.js';
+import { bagFactor } from './field.js';
 
 function fmtTime(ts) {
   if (!ts) return '—';
@@ -40,7 +41,7 @@ export async function renderShifts(root) {
   fieldByDate = (logs || []).reduce((acc, log) => {
     const d = log.date || log.logged_at?.slice(0, 10) || '';
     if (!acc[d]) acc[d] = { bag_drop: 0, graffiti: 0 };
-    if (log.type === 'bag_drop') acc[d].bag_drop++;
+    if (log.type === 'bag_drop') acc[d].bag_drop += bagFactor(log.bag_color);
     else if (log.type === 'graffiti') acc[d].graffiti++;
     return acc;
   }, {});
@@ -51,7 +52,7 @@ function fieldSummary(date) {
   const f = fieldByDate[date];
   if (!f) return '—';
   const parts = [];
-  if (f.bag_drop) parts.push(`${f.bag_drop} bag${f.bag_drop !== 1 ? 's' : ''}`);
+  if (f.bag_drop) parts.push(`${+f.bag_drop.toFixed(2)} bag${f.bag_drop !== 1 ? 's' : ''}`);
   if (f.graffiti) parts.push(`${f.graffiti} graffiti`);
   return parts.length ? parts.join(' · ') : '—';
 }

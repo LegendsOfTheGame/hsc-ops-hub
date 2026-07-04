@@ -210,6 +210,7 @@ create table if not exists field_logs (
   property_name   text,
   surface_type    text,
   severity        text,
+  bag_color       text,   -- 'Orange' | 'Yellow' | 'Clear' (bag_drop only); orange-equivalent factor derived at read time (see bagFactor in pages/field.js)
   notes           text,
   status          text default 'Pending',
   created_at      timestamptz default now()

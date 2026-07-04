@@ -4,6 +4,19 @@ import { showToast, openModal, closeModal, getGPS, coordsStr, initChips, chipVal
 const SURFACES   = ['Brick','Metal','Glass','Plastic','Concrete','Wood','Other'];
 const SEVERITIES = ['Minor','Moderate','Major'];
 
+// Bag colors → orange-equivalent factor for reporting (reporting is based on Orange, 31x24).
+// Factor = bag area ÷ orange area. Orange is being phased out by end of Q3 2026;
+// Clear is no longer restocked by the City — use up existing stock.
+const BAG_COLORS = [
+  { name: 'Orange', dims: '31×24', factor: 1 },
+  { name: 'Yellow', dims: '24×18', factor: 0.58 },
+  { name: 'Clear',  dims: '29×20', factor: 0.78 },
+];
+
+export function bagFactor(color) {
+  return BAG_COLORS.find(c => c.name === color)?.factor ?? 1;
+}
+
 const IMGBB_KEY = '2972e511acdd923ba33c1bedd2af2ae7';
 const IMGBB_URL = 'https://api.imgbb.com/1/upload';
 
@@ -26,7 +39,7 @@ export async function renderField(root) {
     <div class="session-summary">
       <div class="session-stat">
         <div class="num" id="count-bags">–</div>
-        <div class="lbl">bags today</div>
+        <div class="lbl" id="count-bags-lbl">bags today</div>
       </div>
       <div class="session-stat">
         <div class="num" id="count-graffiti">–</div>
@@ -94,15 +107,20 @@ async function loadFieldHistory(root, today) {
 
   // Compute counters from DB
   let bags = 0, graffiti = 0, supplyCost = 0;
+  const bagsByColor = { Orange: 0, Yellow: 0, Clear: 0 };
   for (const r of rows) {
-    if (r.type === 'bag_drop') bags++;
-    else if (r.type === 'graffiti') graffiti++;
+    if (r.type === 'bag_drop') {
+      bags += bagFactor(r.bag_color);
+      if (bagsByColor[r.bag_color] != null) bagsByColor[r.bag_color]++;
+    } else if (r.type === 'graffiti') graffiti++;
     else if (r.type === 'supply_use') supplyCost += parseFloat(r.supply_cost) || 0;
   }
   const bagEl = root.querySelector('#count-bags');
+  const bagLblEl = root.querySelector('#count-bags-lbl');
   const grafEl = root.querySelector('#count-graffiti');
   const supEl = root.querySelector('#count-supplies');
-  if (bagEl) bagEl.textContent = bags;
+  if (bagEl) bagEl.textContent = bags.toFixed(2).replace(/\.?0+$/, '') || '0';
+  if (bagLblEl) bagLblEl.textContent = `bags today (${bagsByColor.Orange} Orange, ${bagsByColor.Yellow} Yellow, ${bagsByColor.Clear} Clear)`;
   if (grafEl) grafEl.textContent = graffiti;
   if (supEl) supEl.textContent = '$' + supplyCost.toFixed(2);
 
@@ -115,7 +133,7 @@ async function loadFieldHistory(root, today) {
     <tbody>
       ${rows.map(r => `<tr>
         <td style="white-space:nowrap">${fmtDateTime(r.logged_at)}</td>
-        <td>${r.type === 'bag_drop' ? '🗑️ Bag' : r.type === 'supply_use' ? '🧴 Supply' : '🚨 Graffiti'}</td>
+        <td>${r.type === 'bag_drop' ? `🗑️ Bag${r.bag_color ? ` (${r.bag_color})` : ''}` : r.type === 'supply_use' ? '🧴 Supply' : '🚨 Graffiti'}</td>
         <td>${r.property_name || r.location || '—'}</td>
         <td style="color:var(--text-muted)">${r.notes || '—'}</td>
       </tr>`).join('')}
@@ -139,6 +157,13 @@ function openBagModal(root) {
       <div class="form-group">
         <label>Time</label>
         <div style="font-size:22px;font-weight:700;color:var(--accent)" id="bag-time">${now()}</div>
+      </div>
+      <div class="form-group">
+        <label>Bag Color</label>
+        <div class="chip-group" id="bag-color">
+          ${BAG_COLORS.map(c => `<button class="chip" data-value="${c.name}">${c.name} <span style="font-weight:400;opacity:.7">(${c.dims})</span></button>`).join('')}
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px" id="bag-color-hint"></div>
       </div>
       <div class="form-group">
         <label>Location</label>
@@ -165,18 +190,32 @@ function openBagModal(root) {
     // Auto-GPS
     autoGPS(box, '#bag-location', '#bag-gps', '#bag-gps-hint');
 
+    const colorGroup = box.querySelector('#bag-color');
+    const colorHint  = box.querySelector('#bag-color-hint');
+    initChips(colorGroup);
+    colorGroup.addEventListener('click', () => {
+      const val = chipValue(colorGroup);
+      const c = BAG_COLORS.find(c => c.name === val);
+      colorHint.textContent = c ? `Counts as ${c.factor} orange-equivalent bag${c.factor === 1 ? '' : 's'}` : '';
+    });
+
     box.querySelector('#bag-submit').addEventListener('click', async () => {
+      const color = chipValue(colorGroup);
+      if (!color) { showToast('Select a bag color'); return; }
+
       const today = localDateStr();
+      const userNotes = box.querySelector('#bag-notes').value.trim();
       const row = {
         type: 'bag_drop',
         logged_at: new Date().toISOString(),
         date: today,
         location: box.querySelector('#bag-location').value.trim() || null,
-        notes: box.querySelector('#bag-notes').value.trim() || null,
+        bag_color: color,
+        notes: userNotes ? `${color} bag — ${userNotes}` : `${color} bag`,
       };
       await insert('field_logs', row);
       closeModal();
-      showToast('✓ Bag drop logged');
+      showToast(`✓ Bag drop logged (${color})`);
       loadFieldHistory(root, today);
     });
   });
