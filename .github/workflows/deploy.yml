@@ -25,6 +25,11 @@ jobs:
       - uses: actions/configure-pages@v5
         env:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      # Cache busting: index.html reads this to load every file with ?v=<commit>
+      - name: Stamp release version
+        run: |
+          python3 -c "import json, os, pathlib; files = sorted(str(p.relative_to('app')) for p in pathlib.Path('app').rglob('*.js')); json.dump({'v': os.environ['GITHUB_SHA'][:8], 'files': files}, open('app/version.json', 'w'))"
+          cat app/version.json
       - uses: actions/upload-pages-artifact@v3
         env:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true

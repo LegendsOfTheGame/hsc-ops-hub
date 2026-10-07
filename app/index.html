@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="HSC Ops">
   <title>HSC Ops Hub</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" id="main-css">
 </head>
 <body>
 
@@ -102,6 +102,31 @@
   <!-- Toast -->
   <div class="toast" id="toast" hidden></div>
 
-  <script type="module" src="app.js?v=20261007f"></script>
+  <!--
+    Cache-busting loader. GitHub Pages lets browsers reuse files for 10 minutes,
+    so after a deploy phones could keep running old page code. The deploy
+    workflow writes version.json (commit id + every .js file); it is fetched
+    fresh on each open and every module and the stylesheet are loaded with
+    ?v=<commit>, so a normal reopen always gets the latest release.
+    No version.json (local dev) → files load as-is.
+  -->
+  <script>
+    (async () => {
+      let v = '', files = [];
+      try {
+        const res = await fetch('version.json', { cache: 'no-store' });
+        if (res.ok) ({ v, files } = await res.json());
+      } catch {}
+      const q = v ? `?v=${encodeURIComponent(v)}` : '';
+      if (q) {
+        const map = document.createElement('script');
+        map.type = 'importmap';
+        map.textContent = JSON.stringify({ imports: Object.fromEntries(files.map(f => [`./${f}`, `./${f}${q}`])) });
+        document.head.appendChild(map);
+        document.getElementById('main-css').href = `style.css${q}`;
+      }
+      import(`./app.js${q}`);
+    })();
+  </script>
 </body>
 </html>
