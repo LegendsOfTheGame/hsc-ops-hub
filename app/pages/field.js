@@ -17,6 +17,68 @@ export function bagFactor(color) {
   return BAG_COLORS.find(c => c.name === color)?.factor ?? 1;
 }
 
+// Fast-food litter tallied per bag (stored as item_counts jsonb on the bag_drop row).
+// Add a new category here — no schema change needed.
+export const LITTER_ITEMS = [
+  { key: 'coffee_cups',    label: 'Coffee cups',    icon: '☕' },
+  { key: 'food_packaging', label: 'Food packaging', icon: '🍔' },
+  { key: 'drink_cups',     label: 'Drink cups',     icon: '🥤' },
+];
+
+const FILL_LEVELS     = ['Full', 'Overflowing'];
+const CONTAINER_TYPES = ['City litter bin', 'Recycling bin', 'Business bin', 'Other'];
+
+const LB_PER_KG = 2.20462;
+
+// ── Current bag (timer + live tally), kept per-device in localStorage ────────
+
+const BAG_KEY  = 'hsc2_bag_current';
+const UNIT_KEY = 'hsc2_weight_unit';
+
+function getCurrentBag() {
+  let bag = null;
+  try { bag = JSON.parse(localStorage.getItem(BAG_KEY)); } catch {}
+  // A bag left open from a previous day is stale — never carry its time over
+  if (!bag || (bag.start && localDateStr(new Date(bag.start)) !== localDateStr())) {
+    bag = { start: null, counts: {} };
+  }
+  bag.counts = bag.counts || {};
+  return bag;
+}
+
+function saveCurrentBag(bag) {
+  try { localStorage.setItem(BAG_KEY, JSON.stringify(bag)); } catch {}
+}
+
+function startNewBag() {
+  saveCurrentBag({ start: new Date().toISOString(), counts: {} });
+}
+
+// When no bag timer was started, fall back to today's punch-clock start
+function bagStartFallback() {
+  try {
+    const punch = JSON.parse(localStorage.getItem('hsc2_punch'));
+    if (punch?.date === localDateStr()) return punch.start;
+  } catch {}
+  return null;
+}
+
+function getWeightUnit() {
+  try { return localStorage.getItem(UNIT_KEY) || 'lb'; } catch { return 'lb'; }
+}
+
+function fmtElapsed(ms) {
+  const m = Math.floor(ms / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+export function countItems(counts) {
+  return LITTER_ITEMS.reduce((s, i) => s + (parseInt(counts?.[i.key]) || 0), 0);
+}
+
+let bagTicker = null;
+
 const IMGBB_KEY = '2972e511acdd923ba33c1bedd2af2ae7';
 const IMGBB_URL = 'https://api.imgbb.com/1/upload';
 
@@ -42,6 +104,10 @@ export async function renderField(root) {
         <div class="lbl" id="count-bags-lbl">bags today</div>
       </div>
       <div class="session-stat">
+        <div class="num" id="count-bins">–</div>
+        <div class="lbl">full bins today</div>
+      </div>
+      <div class="session-stat">
         <div class="num" id="count-graffiti">–</div>
         <div class="lbl">graffiti today</div>
       </div>
@@ -51,11 +117,37 @@ export async function renderField(root) {
       </div>
     </div>
 
+    <div class="card current-bag">
+      <div class="current-bag-head">
+        <div>
+          <div class="card-title" style="margin-bottom:2px">Current Bag</div>
+          <div class="current-bag-timer" id="bag-timer">Not started</div>
+        </div>
+        <button class="btn btn-sm btn-secondary" id="bag-restart">Start Bag</button>
+      </div>
+      <div class="tally-grid" id="bag-tally">
+        ${LITTER_ITEMS.map(i => `
+          <div class="tally-item">
+            <button class="tally-btn" data-key="${i.key}">
+              <span class="tally-icon">${i.icon}</span>
+              <span class="tally-count" id="tally-${i.key}">0</span>
+              <span class="tally-label">${i.label}</span>
+            </button>
+            <button class="tally-undo" data-key="${i.key}" aria-label="Remove one ${i.label}">−1</button>
+          </div>`).join('')}
+      </div>
+    </div>
+
     <div class="field-actions">
       <button class="field-card" id="btn-bag">
         <div class="field-card-icon">🗑️</div>
         <div class="field-card-label">Bag Drop</div>
-        <div class="field-card-sub">Log a filled bag</div>
+        <div class="field-card-sub">Weigh &amp; log a full bag</div>
+      </button>
+      <button class="field-card" id="btn-bin">
+        <div class="field-card-icon">🚮</div>
+        <div class="field-card-label">Full Bin</div>
+        <div class="field-card-sub">Log a full container</div>
       </button>
       <button class="field-card" id="btn-graffiti">
         <div class="field-card-icon">🚨</div>
@@ -67,7 +159,7 @@ export async function renderField(root) {
         <div class="field-card-label">Use Supply</div>
         <div class="field-card-sub">Log supply used</div>
       </button>
-      <button class="field-card" id="btn-bylaw">
+      <button class="field-card field-card-wide" id="btn-bylaw">
         <div class="field-card-icon">⚖️</div>
         <div class="field-card-label">Bylaw</div>
         <div class="field-card-sub">Report an offense</div>
@@ -89,6 +181,8 @@ export async function renderField(root) {
   `;
 
   root.querySelector('#btn-bag').addEventListener('click', () => openBagModal(root));
+  root.querySelector('#btn-bin').addEventListener('click', () => openBinModal(root));
+  mountCurrentBag(root);
   root.querySelector('#btn-graffiti').addEventListener('click', () => openGraffitiModal(root));
   root.querySelector('#btn-supply').addEventListener('click', () => openSupplyModal(root));
   root.querySelector('#btn-bylaw').addEventListener('click', () => {
@@ -100,27 +194,76 @@ export async function renderField(root) {
   loadCitizenReports(root);
 }
 
+// ── Current bag card ─────────────────────────────────────────────────────────
+
+function mountCurrentBag(root) {
+  const timerEl = root.querySelector('#bag-timer');
+  const restart = root.querySelector('#bag-restart');
+
+  function refresh() {
+    if (!timerEl.isConnected) { clearInterval(bagTicker); bagTicker = null; return; }
+    const bag = getCurrentBag();
+    if (bag.start) {
+      timerEl.textContent = `⏱ ${fmtElapsed(Date.now() - new Date(bag.start).getTime())} on this bag`;
+      restart.textContent = 'Restart';
+    } else {
+      timerEl.textContent = 'Not started — tap Start Bag or tally an item';
+      restart.textContent = 'Start Bag';
+    }
+    for (const i of LITTER_ITEMS) {
+      const el = root.querySelector(`#tally-${i.key}`);
+      if (el) el.textContent = bag.counts[i.key] || 0;
+    }
+  }
+
+  restart.addEventListener('click', () => {
+    const bag = getCurrentBag();
+    if (bag.start && countItems(bag.counts) && !confirm('Restart the bag timer and clear the tally?')) return;
+    startNewBag();
+    refresh();
+  });
+
+  root.querySelector('#bag-tally').addEventListener('click', e => {
+    const btn = e.target.closest('[data-key]');
+    if (!btn) return;
+    const bag = getCurrentBag();
+    if (!bag.start) bag.start = new Date().toISOString(); // first pickup starts the bag
+    const delta = btn.classList.contains('tally-undo') ? -1 : 1;
+    bag.counts[btn.dataset.key] = Math.max(0, (bag.counts[btn.dataset.key] || 0) + delta);
+    saveCurrentBag(bag);
+    refresh();
+  });
+
+  clearInterval(bagTicker);
+  bagTicker = setInterval(refresh, 1000);
+  refresh();
+}
+
 
 async function loadFieldHistory(root, today) {
   const { data } = await select('field_logs', { filter: { date: today }, order: 'logged_at', ascending: false });
   const rows = data || [];
 
   // Compute counters from DB
-  let bags = 0, graffiti = 0, supplyCost = 0;
+  let bags = 0, graffiti = 0, supplyCost = 0, bins = 0, weightKg = 0;
   const bagsByColor = { Orange: 0, Yellow: 0, Clear: 0 };
   for (const r of rows) {
     if (r.type === 'bag_drop') {
       bags += bagFactor(r.bag_color);
+      weightKg += parseFloat(r.bag_weight_kg) || 0;
       if (bagsByColor[r.bag_color] != null) bagsByColor[r.bag_color]++;
-    } else if (r.type === 'graffiti') graffiti++;
+    } else if (r.type === 'bin_full') bins++;
+    else if (r.type === 'graffiti') graffiti++;
     else if (r.type === 'supply_use') supplyCost += parseFloat(r.supply_cost) || 0;
   }
   const bagEl = root.querySelector('#count-bags');
   const bagLblEl = root.querySelector('#count-bags-lbl');
+  const binEl = root.querySelector('#count-bins');
+  if (binEl) binEl.textContent = bins;
   const grafEl = root.querySelector('#count-graffiti');
   const supEl = root.querySelector('#count-supplies');
   if (bagEl) bagEl.textContent = bags.toFixed(2).replace(/\.?0+$/, '') || '0';
-  if (bagLblEl) bagLblEl.textContent = `bags today (${bagsByColor.Orange} Orange, ${bagsByColor.Yellow} Yellow, ${bagsByColor.Clear} Clear)`;
+  if (bagLblEl) bagLblEl.textContent = `bags today (${bagsByColor.Orange} Orange, ${bagsByColor.Yellow} Yellow, ${bagsByColor.Clear} Clear)${weightKg ? ` · ${fmtWeight(weightKg)}` : ''}`;
   if (grafEl) grafEl.textContent = graffiti;
   if (supEl) supEl.textContent = '$' + supplyCost.toFixed(2);
 
@@ -133,12 +276,27 @@ async function loadFieldHistory(root, today) {
     <tbody>
       ${rows.map(r => `<tr>
         <td style="white-space:nowrap">${fmtDateTime(r.logged_at)}</td>
-        <td>${r.type === 'bag_drop' ? `🗑️ Bag${r.bag_color ? ` (${r.bag_color})` : ''}` : r.type === 'supply_use' ? '🧴 Supply' : '🚨 Graffiti'}</td>
+        <td>${typeLabel(r)}</td>
         <td>${r.property_name || r.location || '—'}</td>
         <td style="color:var(--text-muted)">${r.notes || '—'}</td>
       </tr>`).join('')}
     </tbody>
   </table>`;
+}
+
+function typeLabel(r) {
+  switch (r.type) {
+    case 'bag_drop':   return `🗑️ Bag${r.bag_color ? ` (${r.bag_color})` : ''}`;
+    case 'bin_full':   return `🚮 ${r.fill_level || 'Full'} bin`;
+    case 'supply_use': return '🧴 Supply';
+    default:           return '🚨 Graffiti';
+  }
+}
+
+// Shows kg plus the unit the user weighs in, e.g. "4.5 kg (9.9 lb)"
+function fmtWeight(kg) {
+  const k = `${+kg.toFixed(1)} kg`;
+  return getWeightUnit() === 'lb' ? `${+(kg * LB_PER_KG).toFixed(1)} lb (${k})` : k;
 }
 
 function now() {
@@ -148,6 +306,14 @@ function now() {
 // ── Bag modal ────────────────────────────────────────────────────────────────
 
 function openBagModal(root) {
+  const bag = getCurrentBag();
+  const start = bag.start || bagStartFallback();
+  const startMins = start ? Math.max(1, Math.round((Date.now() - new Date(start).getTime()) / 60000)) : '';
+  const startHint = bag.start
+    ? `From bag timer (started ${new Date(bag.start).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' })})`
+    : start ? 'From shift start — no bag timer was running' : 'No timer running — enter an estimate';
+  let unit = getWeightUnit();
+
   const html = `
     <div class="modal-header">
       <h2>🗑️ Bag Drop</h2>
@@ -164,6 +330,33 @@ function openBagModal(root) {
           ${BAG_COLORS.map(c => `<button class="chip" data-value="${c.name}">${c.name} <span style="font-weight:400;opacity:.7">(${c.dims})</span></button>`).join('')}
         </div>
         <div style="font-size:11px;color:var(--text-muted);margin-top:4px" id="bag-color-hint"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Weight <span style="font-weight:400;font-size:11px">(luggage scale)</span></label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="number" id="bag-weight" inputmode="decimal" min="0" step="0.1" placeholder="e.g. 12.5" style="flex:1;min-width:0">
+            <div class="chip-group" id="bag-unit" style="flex-wrap:nowrap">
+              <button class="chip${unit === 'lb' ? ' selected' : ''}" data-value="lb">lb</button>
+              <button class="chip${unit === 'kg' ? ' selected' : ''}" data-value="kg">kg</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Time on Bag <span style="font-weight:400;font-size:11px">(min)</span></label>
+          <input type="number" id="bag-minutes" inputmode="numeric" min="0" step="1" value="${startMins}">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">${startHint}</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Fast Food Items in This Bag</label>
+        <div class="tally-inputs">
+          ${LITTER_ITEMS.map(i => `
+            <label class="tally-input">
+              <span>${i.icon} ${i.label}</span>
+              <input type="number" inputmode="numeric" min="0" step="1" data-key="${i.key}" value="${bag.counts[i.key] || 0}">
+            </label>`).join('')}
+        </div>
       </div>
       <div class="form-group">
         <label>Location</label>
@@ -199,9 +392,37 @@ function openBagModal(root) {
       colorHint.textContent = c ? `Counts as ${c.factor} orange-equivalent bag${c.factor === 1 ? '' : 's'}` : '';
     });
 
+    const unitGroup = box.querySelector('#bag-unit');
+    initChips(unitGroup);
+    unitGroup.addEventListener('click', () => {
+      unit = chipValue(unitGroup) || unit;
+      try { localStorage.setItem(UNIT_KEY, unit); } catch {}
+    });
+
     box.querySelector('#bag-submit').addEventListener('click', async () => {
       const color = chipValue(colorGroup);
       if (!color) { showToast('Select a bag color'); return; }
+
+      const weightRaw = parseFloat(box.querySelector('#bag-weight').value);
+      const weightKg  = weightRaw > 0 ? Math.round((unit === 'lb' ? weightRaw / LB_PER_KG : weightRaw) * 100) / 100 : null;
+      const minsRaw   = parseFloat(box.querySelector('#bag-minutes').value);
+      const minutes   = minsRaw > 0 ? Math.round(minsRaw) : null;
+
+      const counts = {};
+      box.querySelectorAll('.tally-input input').forEach(inp => {
+        counts[inp.dataset.key] = Math.max(0, parseInt(inp.value) || 0);
+      });
+      const itemTotal = countItems(counts);
+
+      // Human-readable summary in notes, so the data survives even if the
+      // waste columns haven't been migrated yet (see schema.sql)
+      const summary = [`${color} bag`];
+      if (weightRaw > 0) summary.push(`${weightRaw} ${unit}`);
+      if (minutes) summary.push(`${minutes} min`);
+      if (itemTotal) summary.push(LITTER_ITEMS.filter(i => counts[i.key]).map(i => `${i.label} ×${counts[i.key]}`).join(', '));
+
+      const submitBtn = box.querySelector('#bag-submit');
+      submitBtn.disabled = true;
 
       const today = localDateStr();
       const userNotes = box.querySelector('#bag-notes').value.trim();
@@ -211,11 +432,104 @@ function openBagModal(root) {
         date: today,
         location: box.querySelector('#bag-location').value.trim() || null,
         bag_color: color,
-        notes: userNotes ? `${color} bag — ${userNotes}` : `${color} bag`,
+        bag_weight_kg: weightKg,
+        bag_minutes: minutes,
+        item_counts: itemTotal ? counts : null,
+        notes: summary.join(' · ') + (userNotes ? ` — ${userNotes}` : ''),
       };
-      await insert('field_logs', row);
+      let { error } = await insert('field_logs', row);
+      if (error) {
+        // Waste columns missing — keep the bag (details are in notes) and flag it
+        const { error: err2 } = await insert('field_logs', { ...row, bag_weight_kg: undefined, bag_minutes: undefined, item_counts: undefined });
+        if (err2) { showToast('Failed to save — check connection', 'error'); submitBtn.disabled = false; return; }
+        showToast('Bag saved, but weight/time columns are missing — run the schema.sql migration', 'error');
+      } else {
+        showToast(`✓ Bag drop logged (${color}${weightRaw > 0 ? `, ${weightRaw} ${unit}` : ''})`);
+      }
+
+      startNewBag(); // the next bag starts now
       closeModal();
-      showToast(`✓ Bag drop logged (${color})`);
+      loadFieldHistory(root, today);
+    });
+  });
+}
+
+// ── Full bin modal ───────────────────────────────────────────────────────────
+
+function openBinModal(root) {
+  const html = `
+    <div class="modal-header">
+      <h2>🚮 Full Bin</h2>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Time</label>
+        <div style="font-size:22px;font-weight:700;color:var(--accent)">${now()}</div>
+      </div>
+      <div class="form-group">
+        <label>How Full</label>
+        <div class="chip-group" id="bin-fill">
+          ${FILL_LEVELS.map(f => `<button class="chip${f === 'Full' ? ' selected' : ''}" data-value="${f}">${f}</button>`).join('')}
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Container</label>
+        <div class="chip-group" id="bin-type">
+          ${CONTAINER_TYPES.map((t, i) => `<button class="chip${i === 0 ? ' selected' : ''}" data-value="${t}">${t}</button>`).join('')}
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Location</label>
+        <div class="gps-row">
+          <input type="text" id="bin-location" placeholder="GPS detecting…">
+          <button class="gps-btn" id="bin-gps">📍</button>
+        </div>
+        <div class="gps-hint" id="bin-gps-hint"></div>
+      </div>
+      <div class="form-group">
+        <label>Notes <span style="font-weight:400;font-size:11px">(optional)</span></label>
+        <input type="text" id="bin-notes" placeholder="e.g. bin at Barton + Sherman, bags piled beside it">
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary" id="bin-submit">Log Full Bin</button>
+        <button class="btn btn-secondary" id="bin-cancel">Cancel</button>
+      </div>
+    </div>
+  `;
+
+  openModal(html, box => {
+    box.querySelector('#bin-cancel').addEventListener('click', closeModal);
+    initChips(box.querySelector('#bin-fill'));
+    initChips(box.querySelector('#bin-type'));
+    autoGPS(box, '#bin-location', '#bin-gps', '#bin-gps-hint');
+
+    box.querySelector('#bin-submit').addEventListener('click', async () => {
+      const submitBtn = box.querySelector('#bin-submit');
+      submitBtn.disabled = true;
+
+      const fill = chipValue(box.querySelector('#bin-fill')) || 'Full';
+      const container = chipValue(box.querySelector('#bin-type')) || CONTAINER_TYPES[0];
+      const userNotes = box.querySelector('#bin-notes').value.trim();
+      const today = localDateStr();
+      const row = {
+        type: 'bin_full',
+        logged_at: new Date().toISOString(),
+        date: today,
+        location: box.querySelector('#bin-location').value.trim() || null,
+        fill_level: fill,
+        container_type: container,
+        notes: `${fill} ${container.toLowerCase()}` + (userNotes ? ` — ${userNotes}` : ''),
+      };
+      let { error } = await insert('field_logs', row);
+      if (error) {
+        const { error: err2 } = await insert('field_logs', { ...row, fill_level: undefined, container_type: undefined });
+        if (err2) { showToast('Failed to save — check connection', 'error'); submitBtn.disabled = false; return; }
+        showToast('Bin saved, but fill/container columns are missing — run the schema.sql migration', 'error');
+      } else {
+        showToast(`✓ ${fill} bin logged`);
+      }
+      closeModal();
       loadFieldHistory(root, today);
     });
   });

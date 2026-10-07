@@ -40,8 +40,12 @@ export async function renderShifts(root) {
   // Group field logs by date
   fieldByDate = (logs || []).reduce((acc, log) => {
     const d = log.date || log.logged_at?.slice(0, 10) || '';
-    if (!acc[d]) acc[d] = { bag_drop: 0, graffiti: 0 };
-    if (log.type === 'bag_drop') acc[d].bag_drop += bagFactor(log.bag_color);
+    if (!acc[d]) acc[d] = { bag_drop: 0, graffiti: 0, bin_full: 0, weight_kg: 0 };
+    if (log.type === 'bag_drop') {
+      acc[d].bag_drop += bagFactor(log.bag_color);
+      acc[d].weight_kg += parseFloat(log.bag_weight_kg) || 0;
+    }
+    else if (log.type === 'bin_full') acc[d].bin_full++;
     else if (log.type === 'graffiti') acc[d].graffiti++;
     return acc;
   }, {});
@@ -52,7 +56,8 @@ function fieldSummary(date) {
   const f = fieldByDate[date];
   if (!f) return '—';
   const parts = [];
-  if (f.bag_drop) parts.push(`${+f.bag_drop.toFixed(2)} bag${f.bag_drop !== 1 ? 's' : ''}`);
+  if (f.bag_drop) parts.push(`${+f.bag_drop.toFixed(2)} bag${f.bag_drop !== 1 ? 's' : ''}${f.weight_kg ? ` (${+f.weight_kg.toFixed(1)} kg)` : ''}`);
+  if (f.bin_full) parts.push(`${f.bin_full} full bin${f.bin_full !== 1 ? 's' : ''}`);
   if (f.graffiti) parts.push(`${f.graffiti} graffiti`);
   return parts.length ? parts.join(' · ') : '—';
 }

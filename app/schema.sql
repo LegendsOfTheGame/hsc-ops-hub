@@ -202,7 +202,7 @@ create table if not exists property_history (
 -- ── field_logs (iPhone field logging: bag drops + graffiti spots) ─────────────
 create table if not exists field_logs (
   id              bigserial primary key,
-  type            text not null,  -- 'bag_drop' | 'graffiti'
+  type            text not null,  -- 'bag_drop' | 'bin_full' | 'graffiti' | 'supply_use'
   logged_at       timestamptz not null,
   date            text,
   location        text,
@@ -211,6 +211,11 @@ create table if not exists field_logs (
   surface_type    text,
   severity        text,
   bag_color       text,   -- 'Orange' | 'Yellow' | 'Clear' (bag_drop only); orange-equivalent factor derived at read time (see bagFactor in pages/field.js)
+  bag_weight_kg   numeric(6,2),  -- bag_drop: luggage-scale weight, always stored in kg
+  bag_minutes     numeric(6,1),  -- bag_drop: minutes spent filling this bag
+  item_counts     jsonb,         -- bag_drop: fast-food litter tally, e.g. {"coffee_cups":4,"food_packaging":2,"drink_cups":1}
+  fill_level      text,          -- bin_full: 'Full' | 'Overflowing'
+  container_type  text,          -- bin_full: 'City litter bin' | 'Recycling bin' | 'Business bin' | 'Other'
   notes           text,
   status          text default 'Pending',
   created_at      timestamptz default now()
@@ -267,3 +272,14 @@ begin
     );
   end loop;
 end $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 2026-10 — BIA waste tracking (bag weight, time per bag, fast-food
+-- tally, full bins). Safe to re-run on an existing database.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+alter table field_logs add column if not exists bag_weight_kg  numeric(6,2);
+alter table field_logs add column if not exists bag_minutes    numeric(6,1);
+alter table field_logs add column if not exists item_counts    jsonb;
+alter table field_logs add column if not exists fill_level     text;
+alter table field_logs add column if not exists container_type text;

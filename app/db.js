@@ -15,7 +15,7 @@ function headers(extra = {}) {
 }
 
 // SELECT rows from a table
-export async function select(table, { filter = {}, order = null, ascending = true, limit = null } = {}) {
+export async function select(table, { filter = {}, order = null, ascending = true, limit = null, offset = null } = {}) {
   if (!configured()) return localSelect(table, filter);
 
   let url = `${SUPABASE_URL}/rest/v1/${table}?select=*`;
@@ -24,6 +24,7 @@ export async function select(table, { filter = {}, order = null, ascending = tru
   }
   if (order) url += `&order=${order}.${ascending ? 'asc' : 'desc'}`;
   if (limit) url += `&limit=${limit}`;
+  if (offset) url += `&offset=${offset}`;
 
   try {
     const res = await fetch(url, { headers: headers() });

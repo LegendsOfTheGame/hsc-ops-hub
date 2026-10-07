@@ -452,6 +452,42 @@ html, body {
 .field-card-icon  { font-size: 36px; }
 .field-card-label { font-size: 16px; font-weight: 700; color: var(--text-primary); }
 .field-card-sub   { font-size: 12px; color: var(--text-muted); }
+.field-card-wide  { grid-column: 1 / -1; padding: 18px 20px; }
+
+/* ── Current bag: timer + fast-food tally ── */
+.current-bag-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.current-bag-timer { font-size: 15px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
+.tally-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tally-item { display: flex; flex-direction: column; gap: 4px; }
+.tally-btn {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 6px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  color: var(--text-primary);
+  font-family: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.tally-btn:active { background: rgba(230,168,23,0.12); border-color: var(--accent); }
+.tally-icon  { font-size: 24px; }
+.tally-count { font-size: 24px; font-weight: 700; color: var(--accent); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tally-label { font-size: 11px; color: var(--text-muted); text-align: center; }
+.tally-undo {
+  background: none; border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text-muted); font-size: 11px; padding: 3px 0; cursor: pointer; font-family: inherit;
+}
+.tally-inputs { display: flex; flex-direction: column; gap: 6px; }
+.tally-input { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; font-weight: 400; }
+.tally-input input { width: 80px; }
+
+/* ── Waste report ── */
+.waste-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.waste-stat { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; }
+.waste-stat .num { font-size: 22px; font-weight: 700; color: var(--accent); line-height: 1.1; }
+.waste-stat .lbl { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.waste-stat .sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 
 /* ── Citizen report rows ── */
 .citizen-report-row {
@@ -714,11 +750,12 @@ html, body {
 /* ── Field log session summary ── */
 .session-summary {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 20px;
 }
 .session-stat {
-  flex: 1;
+  flex: 1 1 120px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 6px;
