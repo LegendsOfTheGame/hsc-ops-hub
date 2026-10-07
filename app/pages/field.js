@@ -31,6 +31,7 @@ export const LITTER_ITEMS = [
   { key: 'food_packaging', label: 'Fast food',      icon: '🍔', brands: BRANDS },
   { key: 'drink_cups',     label: 'Drink cups',     icon: '🥤' },
   { key: 'clothing',       label: 'Clothing',       icon: '👕' },
+  { key: 'ensure_cans',    label: 'Ensure cans',    icon: '🥫' },
 ];
 
 const FILL_LEVELS     = ['Full', 'Overflowing'];
