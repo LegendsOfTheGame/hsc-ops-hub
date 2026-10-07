@@ -262,7 +262,7 @@ function mountCurrentBag(root) {
     const bag = getCurrentBag();
     if (bag.start) {
       timerEl.textContent = `⏱ ${fmtElapsed(Date.now() - new Date(bag.start).getTime())} on this bag`;
-      restart.textContent = 'Restart';
+      restart.textContent = 'Cancel Bag';
     } else {
       timerEl.textContent = 'Not started — tap Start Bag or tally an item';
       restart.textContent = 'Start Bag';
@@ -277,8 +277,12 @@ function mountCurrentBag(root) {
 
   restart.addEventListener('click', () => {
     const bag = getCurrentBag();
-    if (bag.start && countItems(bag.counts) && !confirm('Restart the bag timer and clear the tally?')) return;
-    startNewBag();
+    if (!bag.start) { startNewBag(); refresh(); return; }
+    // Cancel: stop the timer without logging a bag (e.g. started by accident)
+    const n = countItems(bag.counts);
+    if (n && !confirm(`Cancel this bag? The timer stops and ${n} tallied item${n === 1 ? '' : 's'} will be cleared.`)) return;
+    saveCurrentBag({ start: null, counts: {}, brands: {}, log: [] });
+    showToast('Bag cancelled');
     refresh();
   });
 
