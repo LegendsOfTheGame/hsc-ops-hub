@@ -334,7 +334,7 @@ async function loadFieldHistory(root, today) {
         <td style="white-space:nowrap">${fmtDateTime(r.logged_at)}</td>
         <td>${typeLabel(r)}</td>
         <td>${r.property_name || r.location || '—'}</td>
-        <td style="color:var(--text-muted)">${r.notes || '—'}</td>
+        <td style="color:var(--text-muted)">${r.image_url && r.type === 'bag_drop' ? `<a href="${r.image_url}" target="_blank" rel="noopener">📷</a> ` : ''}${r.notes || '—'}</td>
       </tr>`).join('')}
     </tbody>
   </table>`;
@@ -386,6 +386,17 @@ function openBagModal(root) {
           ${BAG_COLORS.map(c => `<button class="chip" data-value="${c.name}">${c.name} <span style="font-weight:400;opacity:.7">(${c.dims})</span></button>`).join('')}
         </div>
         <div style="font-size:11px;color:var(--text-muted);margin-top:4px" id="bag-color-hint"></div>
+      </div>
+      <div class="form-group">
+        <label>Photo <span style="font-weight:400;font-size:11px;color:var(--danger)">(required)</span></label>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+          <label for="bag-photo-input" class="btn btn-secondary" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin:0">
+            📷 <span id="bag-photo-label">Take Photo</span>
+          </label>
+          <input type="file" id="bag-photo-input" accept="image/*" capture="environment" style="display:none">
+          <img id="bag-photo-img" hidden style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Bag on the luggage scale with the reading visible</div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -461,9 +472,27 @@ function openBagModal(root) {
       try { localStorage.setItem(UNIT_KEY, unit); } catch {}
     });
 
+    let photoBase64 = null;
+    let photoUrl    = null; // kept after upload so a failed save can retry without re-uploading
+    const photoInput = box.querySelector('#bag-photo-input');
+    const photoImg   = box.querySelector('#bag-photo-img');
+    photoInput.addEventListener('change', async () => {
+      const file = photoInput.files[0];
+      if (!file) return;
+      try {
+        const dataUrl = await shrinkPhoto(file);
+        photoBase64 = dataUrl.split(',')[1];
+        photoUrl = null;
+        photoImg.src = dataUrl;
+        photoImg.hidden = false;
+        box.querySelector('#bag-photo-label').textContent = 'Retake';
+      } catch { showToast('Could not read that photo — try again', 'error'); }
+    });
+
     box.querySelector('#bag-submit').addEventListener('click', async () => {
       const color = chipValue(colorGroup);
       if (!color) { showToast('Select a bag color'); return; }
+      if (!photoBase64) { showToast('A photo is required — no photo, no bag', 'error'); return; }
 
       const weightRaw = parseFloat(box.querySelector('#bag-weight').value);
       const weightKg  = weightRaw > 0 ? Math.round((unit === 'lb' ? weightRaw / LB_PER_KG : weightRaw) * 100) / 100 : null;
@@ -491,6 +520,17 @@ function openBagModal(root) {
       const submitBtn = box.querySelector('#bag-submit');
       submitBtn.disabled = true;
 
+      if (!photoUrl) {
+        submitBtn.textContent = 'Uploading photo…';
+        photoUrl = await uploadPhoto(photoBase64);
+        submitBtn.textContent = 'Log Bag Drop';
+        if (!photoUrl) {
+          showToast('Photo upload failed — check signal and tap Log again', 'error');
+          submitBtn.disabled = false;
+          return;
+        }
+      }
+
       const today = localDateStr();
       const userNotes = box.querySelector('#bag-notes').value.trim();
       const row = {
@@ -502,12 +542,13 @@ function openBagModal(root) {
         bag_weight_kg: weightKg,
         bag_minutes: minutes,
         item_counts: itemTotal ? counts : null,
+        image_url: photoUrl,
         notes: summary.join(' · ') + (userNotes ? ` — ${userNotes}` : ''),
       };
       let { error } = await insert('field_logs', row);
       if (error) {
         // Waste columns missing — keep the bag (details are in notes) and flag it
-        const { error: err2 } = await insert('field_logs', { ...row, bag_weight_kg: undefined, bag_minutes: undefined, item_counts: undefined });
+        const { error: err2 } = await insert('field_logs', { ...row, bag_weight_kg: undefined, bag_minutes: undefined, item_counts: undefined, image_url: undefined, notes: `${row.notes} · photo ${photoUrl}` });
         if (err2) { showToast('Failed to save — check connection', 'error'); submitBtn.disabled = false; return; }
         showToast('Bag saved, but weight/time columns are missing — run the schema.sql migration', 'error');
       } else {
@@ -519,6 +560,36 @@ function openBagModal(root) {
       loadFieldHistory(root, today);
     });
   });
+}
+
+// Phone photos are 3–10 MB; shrink to ≤1600px JPEG so uploads work on cell data
+function shrinkPhoto(file, maxSide = 1600) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width  = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(); };
+    img.src = url;
+  });
+}
+
+async function uploadPhoto(base64) {
+  try {
+    const fd = new FormData();
+    fd.append('key', IMGBB_KEY);
+    fd.append('image', base64);
+    const res  = await fetch(IMGBB_URL, { method: 'POST', body: fd });
+    const json = await res.json();
+    return json.success ? json.data.url : null;
+  } catch { return null; }
 }
 
 // ── Full bin modal ───────────────────────────────────────────────────────────

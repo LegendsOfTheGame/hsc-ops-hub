@@ -216,6 +216,7 @@ create table if not exists field_logs (
   item_counts     jsonb,         -- bag_drop: item tally, e.g. {"coffee_cups":3,"food_packaging":2,"clothing":1,"brands":{"coffee_cups":{"Tim Hortons":2,"Other":1},...}}
   fill_level      text,          -- bin_full: 'Full' | 'Overflowing'
   container_type  text,          -- bin_full: 'City litter bin' | 'Recycling bin' | 'Business bin' | 'Other'
+  image_url       text,          -- bag_drop: required photo (bag on scale); graffiti: optional photo
   notes           text,
   status          text default 'Pending',
   created_at      timestamptz default now()
@@ -283,3 +284,4 @@ alter table field_logs add column if not exists bag_minutes    numeric(6,1);
 alter table field_logs add column if not exists item_counts    jsonb;
 alter table field_logs add column if not exists fill_level     text;
 alter table field_logs add column if not exists container_type text;
+alter table field_logs add column if not exists image_url      text;  -- bag photo (required) / graffiti photo

@@ -127,7 +127,7 @@ function computeWaste(bags, bins) {
   });
 
   return {
-    bagCount: bags.length, bagsEq,
+    bagCount: bags.length, bagsEq, photoCount: bags.filter(r => r.image_url).length,
     weighedCount: weighed.length, weighedKg, kgPerEq, estKg,
     timedCount: timed.length, avgMin: timed.length ? timedMin / timed.length : 0, minPerEq, estHours,
     countedCount: counted.length, items,
@@ -172,7 +172,7 @@ function renderWaste(root) {
     : `${n0(have)} of ${n0(total)} bags ${what} — rest estimated`;
 
   let html = `<div class="waste-stats">
-    ${stat(n1(w.bagsEq), 'bags collected', `orange-equivalent · ${n0(w.bagCount)} actual bags`)}
+    ${stat(n1(w.bagsEq), 'bags collected', `orange-equivalent · ${n0(w.bagCount)} actual bags · ${n0(w.photoCount)} with photos`)}
     ${w.weighedCount ? stat(`${n0(w.estKg)} kg`, `litter removed (${n0(w.estKg * LB_PER_KG)} lb)`, estNote(w.weighedCount, w.bagCount, 'weighed')) : stat('—', 'litter weight', 'no bags weighed yet')}
     ${w.weighedCount ? stat(`${n1(w.kgPerEq)} kg`, 'average per bag', `${n1(w.kgPerEq * LB_PER_KG)} lb · orange bag`) : ''}
     ${w.timedCount ? stat(`${n0(w.avgMin)} min`, 'average per bag', `≈ ${n1(w.estHours)} hrs on litter · ${estNote(w.timedCount, w.bagCount, 'timed')}`) : stat('—', 'time per bag', 'no bags timed yet')}
@@ -259,7 +259,7 @@ async function exportWasteCsv(root) {
   const rows = inRange([...bags, ...bins], from, to).sort((a, b) => (a.logged_at || '').localeCompare(b.logged_at || ''));
 
   const header = ['date','time','type','bag_color','orange_equivalent','weight_kg','weight_lb','minutes',
-    ...LITTER_ITEMS.flatMap(i => [i.key, ...(i.brands || []).map(b => `${i.key}_${b.short.toLowerCase()}`)]),'fill_level','container_type','location','notes'];
+    ...LITTER_ITEMS.flatMap(i => [i.key, ...(i.brands || []).map(b => `${i.key}_${b.short.toLowerCase()}`)]),'fill_level','container_type','location','photo_url','notes'];
   const lines = rows.map(r => {
     const isBag = r.type === 'bag_drop';
     const kg = parseFloat(r.bag_weight_kg) || null;
@@ -272,7 +272,7 @@ async function exportWasteCsv(root) {
         isBag && r.item_counts ? (r.item_counts[i.key] ?? 0) : '',
         ...(i.brands || []).map(b => isBag && r.item_counts?.brands?.[i.key] ? (r.item_counts.brands[i.key][b.name] ?? 0) : ''),
       ]),
-      r.fill_level || '', r.container_type || '', r.location || '', r.notes || '',
+      r.fill_level || '', r.container_type || '', r.location || '', r.image_url || '', r.notes || '',
     ].map(v => JSON.stringify(v ?? '')).join(',');
   });
 
