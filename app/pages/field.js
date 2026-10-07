@@ -18,10 +18,17 @@ export function bagFactor(color) {
 }
 
 // Litter items tallied per bag (stored as item_counts jsonb on the bag_drop row).
-// Add a new category here — no schema change needed.
+// Items with `brands` pop up a brand picker on each tap; the split is stored as
+// item_counts.brands[key][brand]. Add a category or brand here — no schema change needed.
+export const BRANDS = [
+  { name: "McDonald's",  short: 'McD' },
+  { name: 'Tim Hortons', short: 'Tims' },
+  { name: 'Other',       short: 'Other' },
+];
+
 export const LITTER_ITEMS = [
-  { key: 'coffee_cups',    label: 'Coffee cups',    icon: '☕' },
-  { key: 'food_packaging', label: 'Food packaging', icon: '🍔' },
+  { key: 'coffee_cups',    label: 'Coffee cups',    icon: '☕', brands: BRANDS },
+  { key: 'food_packaging', label: 'Fast food',      icon: '🍔', brands: BRANDS },
   { key: 'drink_cups',     label: 'Drink cups',     icon: '🥤' },
   { key: 'clothing',       label: 'Clothing',       icon: '👕' },
 ];
@@ -44,6 +51,8 @@ function getCurrentBag() {
     bag = { start: null, counts: {} };
   }
   bag.counts = bag.counts || {};
+  bag.brands = bag.brands || {};
+  bag.log    = bag.log    || []; // tap history, so −1 removes the right brand
   return bag;
 }
 
@@ -52,7 +61,52 @@ function saveCurrentBag(bag) {
 }
 
 function startNewBag() {
-  saveCurrentBag({ start: new Date().toISOString(), counts: {} });
+  saveCurrentBag({ start: new Date().toISOString(), counts: {}, brands: {}, log: [] });
+}
+
+function addTap(key, brand = null) {
+  const bag = getCurrentBag();
+  if (!bag.start) bag.start = new Date().toISOString(); // first pickup starts the bag
+  bag.counts[key] = (bag.counts[key] || 0) + 1;
+  if (brand) {
+    bag.brands[key] = bag.brands[key] || {};
+    bag.brands[key][brand] = (bag.brands[key][brand] || 0) + 1;
+  }
+  bag.log.push({ key, brand });
+  saveCurrentBag(bag);
+}
+
+function undoTap(key) {
+  const bag = getCurrentBag();
+  if (!bag.counts[key]) return;
+  bag.counts[key]--;
+  const idx = bag.log.map(t => t.key).lastIndexOf(key);
+  let brand = idx >= 0 ? bag.log.splice(idx, 1)[0].brand : null;
+  if (!brand && bag.brands[key]) brand = Object.keys(bag.brands[key]).find(b => bag.brands[key][b] > 0);
+  if (brand && bag.brands[key]?.[brand]) bag.brands[key][brand]--;
+  saveCurrentBag(bag);
+}
+
+function openBrandPicker(item, onPick) {
+  openModal(`
+    <div class="modal-header">
+      <h2>${item.icon} ${item.label} — which brand?</h2>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="brand-picker">
+        ${item.brands.map(b => `<button class="btn btn-secondary brand-btn" data-brand="${b.name}">${b.name}</button>`).join('')}
+      </div>
+    </div>`, box => {
+    box.querySelectorAll('.brand-btn').forEach(btn => btn.addEventListener('click', () => {
+      closeModal();
+      onPick(btn.dataset.brand);
+    }));
+  });
+}
+
+function brandLine(item, brandCounts = {}) {
+  return item.brands.map(b => `${b.short} ${brandCounts[b.name] || 0}`).join(' · ');
 }
 
 // When no bag timer was started, fall back to today's punch-clock start
@@ -133,6 +187,7 @@ export async function renderField(root) {
               <span class="tally-icon">${i.icon}</span>
               <span class="tally-count" id="tally-${i.key}">0</span>
               <span class="tally-label">${i.label}</span>
+              ${i.brands ? `<span class="tally-brands" id="tally-brands-${i.key}"></span>` : ''}
             </button>
             <button class="tally-undo" data-key="${i.key}" aria-label="Remove one ${i.label}">−1</button>
           </div>`).join('')}
@@ -214,6 +269,8 @@ function mountCurrentBag(root) {
     for (const i of LITTER_ITEMS) {
       const el = root.querySelector(`#tally-${i.key}`);
       if (el) el.textContent = bag.counts[i.key] || 0;
+      const br = root.querySelector(`#tally-brands-${i.key}`);
+      if (br) br.textContent = brandLine(i, bag.brands[i.key]);
     }
   }
 
@@ -227,12 +284,10 @@ function mountCurrentBag(root) {
   root.querySelector('#bag-tally').addEventListener('click', e => {
     const btn = e.target.closest('[data-key]');
     if (!btn) return;
-    const bag = getCurrentBag();
-    if (!bag.start) bag.start = new Date().toISOString(); // first pickup starts the bag
-    const delta = btn.classList.contains('tally-undo') ? -1 : 1;
-    bag.counts[btn.dataset.key] = Math.max(0, (bag.counts[btn.dataset.key] || 0) + delta);
-    saveCurrentBag(bag);
-    refresh();
+    const item = LITTER_ITEMS.find(i => i.key === btn.dataset.key);
+    if (btn.classList.contains('tally-undo')) { undoTap(item.key); refresh(); }
+    else if (item.brands) openBrandPicker(item, brand => { addTap(item.key, brand); refresh(); });
+    else { addTap(item.key); refresh(); }
   });
 
   clearInterval(bagTicker);
@@ -352,7 +407,13 @@ function openBagModal(root) {
       <div class="form-group">
         <label>Items Found for This Bag</label>
         <div class="tally-inputs">
-          ${LITTER_ITEMS.map(i => `
+          ${LITTER_ITEMS.map(i => i.brands ? `
+            <div class="tally-input tally-input-brands">
+              <span>${i.icon} ${i.label}</span>
+              <div class="brand-inputs">
+                ${i.brands.map(b => `<label>${b.short}<input type="number" inputmode="numeric" min="0" step="1" data-key="${i.key}" data-brand="${b.name}" value="${bag.brands[i.key]?.[b.name] || 0}"></label>`).join('')}
+              </div>
+            </div>` : `
             <label class="tally-input">
               <span>${i.icon} ${i.label}</span>
               <input type="number" inputmode="numeric" min="0" step="1" data-key="${i.key}" value="${bag.counts[i.key] || 0}">
@@ -410,9 +471,14 @@ function openBagModal(root) {
       const minutes   = minsRaw > 0 ? Math.round(minsRaw) : null;
 
       const counts = {};
+      const brands = {};
       box.querySelectorAll('.tally-input input').forEach(inp => {
-        counts[inp.dataset.key] = Math.max(0, parseInt(inp.value) || 0);
+        const n = Math.max(0, parseInt(inp.value) || 0);
+        const { key, brand } = inp.dataset;
+        counts[key] = (counts[key] || 0) + n; // branded items: total = sum of brands
+        if (brand) (brands[key] ||= {})[brand] = n;
       });
+      counts.brands = brands;
       const itemTotal = countItems(counts);
 
       // Human-readable summary in notes, so the data survives even if the
@@ -420,7 +486,7 @@ function openBagModal(root) {
       const summary = [`${color} bag`];
       if (weightRaw > 0) summary.push(`${weightRaw} ${unit}`);
       if (minutes) summary.push(`${minutes} min`);
-      if (itemTotal) summary.push(LITTER_ITEMS.filter(i => counts[i.key]).map(i => `${i.label} ×${counts[i.key]}`).join(', '));
+      if (itemTotal) summary.push(LITTER_ITEMS.filter(i => counts[i.key]).map(i => `${i.label} ×${counts[i.key]}${i.brands ? ` (${i.brands.filter(x => brands[i.key]?.[x.name]).map(x => `${x.short} ${brands[i.key][x.name]}`).join(', ')})` : ''}`).join(', '));
 
       const submitBtn = box.querySelector('#bag-submit');
       submitBtn.disabled = true;

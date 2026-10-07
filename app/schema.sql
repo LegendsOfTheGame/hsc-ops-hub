@@ -213,7 +213,7 @@ create table if not exists field_logs (
   bag_color       text,   -- 'Orange' | 'Yellow' | 'Clear' (bag_drop only); orange-equivalent factor derived at read time (see bagFactor in pages/field.js)
   bag_weight_kg   numeric(6,2),  -- bag_drop: luggage-scale weight, always stored in kg
   bag_minutes     numeric(6,1),  -- bag_drop: minutes spent filling this bag
-  item_counts     jsonb,         -- bag_drop: item tally, e.g. {"coffee_cups":4,"food_packaging":2,"drink_cups":1,"clothing":1}
+  item_counts     jsonb,         -- bag_drop: item tally, e.g. {"coffee_cups":3,"food_packaging":2,"clothing":1,"brands":{"coffee_cups":{"Tim Hortons":2,"Other":1},...}}
   fill_level      text,          -- bin_full: 'Full' | 'Overflowing'
   container_type  text,          -- bin_full: 'City litter bin' | 'Recycling bin' | 'Business bin' | 'Other'
   notes           text,

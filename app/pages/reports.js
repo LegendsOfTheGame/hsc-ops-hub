@@ -122,7 +122,8 @@ function computeWaste(bags, bins) {
   const countedEq = sum(counted, eq);
   const items = LITTER_ITEMS.map(i => {
     const total = sum(counted, r => parseInt(r.item_counts?.[i.key]) || 0);
-    return { ...i, total, perBag: countedEq ? total / countedEq : 0, est: countedEq ? total / countedEq * bagsEq : 0 };
+    const byBrand = (i.brands || []).map(b => ({ ...b, total: sum(counted, r => parseInt(r.item_counts?.brands?.[i.key]?.[b.name]) || 0) }));
+    return { ...i, total, byBrand, perBag: countedEq ? total / countedEq : 0, est: countedEq ? total / countedEq * bagsEq : 0 };
   });
 
   return {
@@ -138,6 +139,15 @@ function computeWaste(bags, bins) {
 const n0 = v => Math.round(v).toLocaleString('en-CA');
 const n1 = v => (+v.toFixed(1)).toLocaleString('en-CA');
 const money = v => '$' + v.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// e.g. "<br>Tim Hortons 12 (60%) · McDonald's 5 (25%) · Other 3 (15%)"
+function brandSplit(item) {
+  const branded = item.byBrand.reduce((s, b) => s + b.total, 0);
+  if (!branded) return '';
+  return '<br>' + item.byBrand.filter(b => b.total)
+    .sort((a, b) => b.total - a.total)
+    .map(b => `${b.name} ${n0(b.total)} (${Math.round(b.total / branded * 100)}%)`).join(' · ');
+}
 
 function stat(num, lbl, sub = '') {
   return `<div class="waste-stat"><div class="num">${num}</div><div class="lbl">${lbl}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
@@ -171,7 +181,7 @@ function renderWaste(root) {
 
   if (w.countedCount) {
     html += `<div class="waste-stats">
-      ${w.items.map(i => stat(n0(i.total), `${i.icon} ${i.label.toLowerCase()} counted`, `${n1(i.perBag)} per bag${w.countedCount < w.bagCount ? ` · ≈ ${n0(i.est)} across all bags` : ''}`)).join('')}
+      ${w.items.map(i => stat(n0(i.total), `${i.icon} ${i.label.toLowerCase()} counted`, `${n1(i.perBag)} per bag${w.countedCount < w.bagCount ? ` · ≈ ${n0(i.est)} across all bags` : ''}${brandSplit(i)}`)).join('')}
     </div>
     <div style="font-size:11px;color:var(--text-muted);margin:-8px 0 16px">Items tallied in ${n0(w.countedCount)} of ${n0(w.bagCount)} bags.</div>`;
   }
@@ -249,7 +259,7 @@ async function exportWasteCsv(root) {
   const rows = inRange([...bags, ...bins], from, to).sort((a, b) => (a.logged_at || '').localeCompare(b.logged_at || ''));
 
   const header = ['date','time','type','bag_color','orange_equivalent','weight_kg','weight_lb','minutes',
-    ...LITTER_ITEMS.map(i => i.key),'fill_level','container_type','location','notes'];
+    ...LITTER_ITEMS.flatMap(i => [i.key, ...(i.brands || []).map(b => `${i.key}_${b.short.toLowerCase()}`)]),'fill_level','container_type','location','notes'];
   const lines = rows.map(r => {
     const isBag = r.type === 'bag_drop';
     const kg = parseFloat(r.bag_weight_kg) || null;
@@ -258,7 +268,10 @@ async function exportWasteCsv(root) {
       r.date, t, isBag ? 'Bag' : 'Full bin',
       isBag ? r.bag_color : '', isBag ? bagFactor(r.bag_color) : '',
       kg ?? '', kg ? +(kg * LB_PER_KG).toFixed(1) : '', r.bag_minutes ?? '',
-      ...LITTER_ITEMS.map(i => isBag && r.item_counts ? (r.item_counts[i.key] ?? 0) : ''),
+      ...LITTER_ITEMS.flatMap(i => [
+        isBag && r.item_counts ? (r.item_counts[i.key] ?? 0) : '',
+        ...(i.brands || []).map(b => isBag && r.item_counts?.brands?.[i.key] ? (r.item_counts.brands[i.key][b.name] ?? 0) : ''),
+      ]),
       r.fill_level || '', r.container_type || '', r.location || '', r.notes || '',
     ].map(v => JSON.stringify(v ?? '')).join(',');
   });
