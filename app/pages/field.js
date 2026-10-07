@@ -17,12 +17,13 @@ export function bagFactor(color) {
   return BAG_COLORS.find(c => c.name === color)?.factor ?? 1;
 }
 
-// Fast-food litter tallied per bag (stored as item_counts jsonb on the bag_drop row).
+// Litter items tallied per bag (stored as item_counts jsonb on the bag_drop row).
 // Add a new category here — no schema change needed.
 export const LITTER_ITEMS = [
   { key: 'coffee_cups',    label: 'Coffee cups',    icon: '☕' },
   { key: 'food_packaging', label: 'Food packaging', icon: '🍔' },
   { key: 'drink_cups',     label: 'Drink cups',     icon: '🥤' },
+  { key: 'clothing',       label: 'Clothing',       icon: '👕' },
 ];
 
 const FILL_LEVELS     = ['Full', 'Overflowing'];
@@ -349,7 +350,7 @@ function openBagModal(root) {
         </div>
       </div>
       <div class="form-group">
-        <label>Fast Food Items in This Bag</label>
+        <label>Items Found for This Bag</label>
         <div class="tally-inputs">
           ${LITTER_ITEMS.map(i => `
             <label class="tally-input">

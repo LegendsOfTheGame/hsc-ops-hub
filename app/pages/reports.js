@@ -173,7 +173,7 @@ function renderWaste(root) {
     html += `<div class="waste-stats">
       ${w.items.map(i => stat(n0(i.total), `${i.icon} ${i.label.toLowerCase()} counted`, `${n1(i.perBag)} per bag${w.countedCount < w.bagCount ? ` · ≈ ${n0(i.est)} across all bags` : ''}`)).join('')}
     </div>
-    <div style="font-size:11px;color:var(--text-muted);margin:-8px 0 16px">Fast-food items tallied in ${n0(w.countedCount)} of ${n0(w.bagCount)} bags.</div>`;
+    <div style="font-size:11px;color:var(--text-muted);margin:-8px 0 16px">Items tallied in ${n0(w.countedCount)} of ${n0(w.bagCount)} bags.</div>`;
   }
 
   // Monthly breakdown

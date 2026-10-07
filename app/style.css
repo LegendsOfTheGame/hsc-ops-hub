@@ -454,10 +454,11 @@ html, body {
 .field-card-sub   { font-size: 12px; color: var(--text-muted); }
 .field-card-wide  { grid-column: 1 / -1; padding: 18px 20px; }
 
-/* ── Current bag: timer + fast-food tally ── */
+/* ── Current bag: timer + item tally ── */
 .current-bag-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .current-bag-timer { font-size: 15px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
-.tally-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tally-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+@media (max-width: 500px) { .tally-grid { grid-template-columns: repeat(2, 1fr); } }
 .tally-item { display: flex; flex-direction: column; gap: 4px; }
 .tally-btn {
   background: var(--bg-input);
