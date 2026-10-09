@@ -37,7 +37,7 @@ const PAGES = {
 
 const ROLE_PAGES = {
   field: ['home', 'field', 'graffiti', 'inventory', 'bylaw'],
-  bia:   ['reports'],
+  bia:   ['reports', 'bylaw'],
 };
 
 function isPageAllowed(page) {

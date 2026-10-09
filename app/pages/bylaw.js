@@ -1,5 +1,6 @@
 import { select, insert, update } from '../db.js';
 import { showToast, localDateStr, openModal, closeModal } from '../utils.js';
+import { FINES, FINES_SOURCE } from '../bylaw-fines.js';
 
 const IMGBB_KEY = '2972e511acdd923ba33c1bedd2af2ae7';
 const IMGBB_URL = 'https://api.imgbb.com/1/upload';
@@ -20,6 +21,151 @@ const CATEGORIES = [
   'Traffic Sign or Light Issue',
   'Other',
 ];
+
+// Triage guide: can HSC clean it, or is it a by-law matter to log and file?
+// 10-118 wording verified against the Nov 2025 consolidation (includes 25-199).
+// Keep claims here to verified facts; this page is read by the BIA and assistants.
+const GUIDE = {
+  'Litter or Debris': {
+    who: 'hsc',
+    hsc: 'Yes. Litter on sidewalks and boulevards is our core service.',
+    rule: 'By-law 10-118 s.4(1.1): the owner or occupant must keep the boulevard beside their property free of waste. The boulevard includes the sidewalk and the grass strip. s.4(1): the same applies to the yard. s.4(5)(b): waste must not stay longer than 10 days. By-law 86-077 s.9(4)(a): no person may throw litter on a street. s.9(5): if a street is fouled, the owner of the adjacent land must remove it immediately; if the City removes it, the owner pays the cost (s.9(6)–(7)).',
+    note: 'Municipal Law Enforcement practice: the City is responsible for 17 inches from the edge of the curb, unless the waste comes from the property. This figure is not in the by-law text.',
+    report: 'Litter in a park, playground or playcourt is City property. Log it and file it with the City.',
+  },
+  'Graffiti': {
+    who: 'partial',
+    hsc: 'Yes, by paint-over, with permission from the owner. We have no pressure washer, so paint-over is the only fast removal.',
+    rule: 'By-law 10-118 s.5: the owner or occupant must clean graffiti from buildings, structures, fences, retaining walls, paved surfaces, vehicles, trailers and waste containers on their property.',
+    note: 'Commercial District Revitalization Grant: the City can pay 50% of the invoice, to a maximum of $200 for each incident, for a maximum of 5 incidents each year. It does not make removal free.',
+    report: 'Graffiti on City property (bus shelter, street light, park) is the City\'s. Log it and file it. For private property, after a report the City inspects within 5 days and gives a notice to clean. The owner then has 13 days. If the owner does not clean it, the City cleans it within 9 days and bills the owner, also if the owner cleans it late. Phone: 905-546-CITY (905-546-2489).',
+  },
+  'Dumped Garbage': {
+    who: 'partial',
+    hsc: 'Loose litter only. Do not move appliances, tires, construction waste or other bulky items.',
+    rule: 'By-law 10-118 s.4(1) and s.4(1.1): waste on a yard or boulevard is the owner\'s responsibility. s.6: no person may put waste on another property, or on City property, without written permission. By-law 20-221 s.5.2–5.3: garbage goes out after 7:00 p.m. the day before collection, and containers come in by 7:00 p.m. on collection day. 20-221 has no set penalty; it is enforced through the courts.',
+    report: 'Bulky items: log it and file it with the City.',
+  },
+  'Illegal Dumping': {
+    who: 'partial',
+    hsc: 'Loose litter only. Do not move appliances, tires, construction waste or other bulky items.',
+    rule: 'By-law 10-118 s.6(1): "No person shall deposit waste on property without the prior written authority of the owner or occupant of the property." s.6(2): the same applies to City property. If an order is not followed, the City can do the work and add the cost to the property tax roll (s.10).',
+    report: 'Log it with at least one photo, then file it with the City.',
+  },
+  'Overgrown Vegetation': {
+    who: 'city',
+    hsc: 'No. We do not clear weeds or cut grass.',
+    rule: 'By-law 10-118 s.3(1)(c)(i), amended by 25-199: grass and vegetation must be 21 cm or less (urban area, lots of 0.4 ha or less). Exceptions: native or ornamental plants, shrubs and trees, fruit and vegetables, watercourse buffers, naturalized areas. Noxious weeds must be removed.',
+    report: 'Log it. The City portal has no vegetation category, so file it under "Other".',
+  },
+  'Vacant Property': {
+    who: 'city',
+    hsc: 'Litter on the public boulevard in front: see Litter or Debris. Do not go onto the property.',
+    rule: 'By-law 17-127 s.4: the owner must register a vacant building within 30 days. s.9: the owner must keep it in compliance with the Yard Maintenance and Property Standards By-laws, post an owner contact sign, and have someone check the building at least every 2 weeks.',
+    report: 'Log it and file it with the City.',
+  },
+  'Dead Animal': {
+    who: 'city',
+    hsc: 'No. Do not touch it.',
+    rule: 'By-law 86-077 s.9(4)(a): no person may put an animal carcass on a street.',
+    report: 'City service request. Log it and file it with the City.',
+  },
+  'Pothole': {
+    who: 'city',
+    hsc: 'No.',
+    report: 'City service request. Log it and file it with the City.',
+  },
+  'Tree Issue': {
+    who: 'city',
+    hsc: 'No.',
+    rule: 'By-law 15-125 s.3(1): no person may injure or destroy a public tree. This by-law has no set penalty; it is enforced through the courts. On private property, a dead or hazardous tree must be removed (23-162 s.7(2)).',
+    report: 'City service request. Log it and file it with the City.',
+  },
+  'Traffic Sign or Light Issue': {
+    who: 'city',
+    hsc: 'No.',
+    report: 'City service request. Log it and file it with the City.',
+  },
+  'Illegal Parking': {
+    who: 'city',
+    hsc: 'No.',
+    note: 'Street parking is By-law 01-218, which is not in our by-law library.',
+    report: 'Log it with the vehicle details, then file it with the City.',
+  },
+  'Missed Snow/Ice Clearing': {
+    who: 'city',
+    hsc: 'No.',
+    rule: 'By-law 03-296 s.5: the owner or occupant must clear snow and ice from the sidewalk beside their property within 24 hours after a storm ends. This applies to vacant lots too. If the owner does not clear it, the City can clear it and charge the owner (s.8).',
+    report: 'Log it and file it with the City.',
+  },
+  'Other': {
+    who: 'city',
+    hsc: 'Ask Haven.',
+    rule: 'Posters (By-law 10-197 s.5.8): no permit is needed. A poster can stay up for 21 days at most and must come down within 3 days after the event. Use tape only, one poster per event on a pole, and the next pole with a poster for the same event must be at least 200 m away. Public nuisance (By-law 20-077): no urinating or defecating in a public place (s.3), and no knocking over a waste container, mailbox or newspaper box on a street (s.4).',
+    report: 'Log it with a full description and file it under "Other".',
+  },
+};
+
+const WHO_LABEL = {
+  hsc:     { text: 'We clean it',       color: 'var(--success)' },
+  partial: { text: 'Sometimes',         color: 'var(--warning)' },
+  city:    { text: 'Log and report',    color: 'var(--danger)'  },
+};
+
+function guideBody(cat) {
+  const g = GUIDE[cat];
+  if (!g) return '';
+  const row = (label, text) => text
+    ? `<p style="margin:0 0 8px"><strong>${label}</strong> ${text}</p>` : '';
+  return `
+    ${row('Can HSC clean it?', g.hsc)}
+    ${row('The rule:', g.rule)}
+    ${row('Note:', g.note)}
+    ${finesTable(cat)}
+    ${row('To report:', g.report)}`;
+}
+
+function finesTable(cat) {
+  const rows = FINES[cat];
+  if (!rows) return '';
+  return `
+    <p style="margin:0 0 4px"><strong>Fines:</strong></p>
+    <table style="width:100%;border-collapse:collapse;margin:0 0 8px;font-size:12px">
+      ${rows.map(([what, sec, amt]) => `
+        <tr style="border-top:1px solid var(--border)">
+          <td style="padding:4px 6px 4px 0">${what}</td>
+          <td style="padding:4px 6px;white-space:nowrap;color:var(--text-muted)">${sec}</td>
+          <td style="padding:4px 0;text-align:right;font-weight:600">${amt}</td>
+        </tr>`).join('')}
+    </table>`;
+}
+
+function whoBadge(cat) {
+  const w = WHO_LABEL[GUIDE[cat]?.who];
+  return w
+    ? `<span style="font-size:11px;font-weight:600;color:${w.color};white-space:nowrap">${w.text}</span>`
+    : '';
+}
+
+function renderGuide() {
+  return `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">Can we handle it?</div>
+      <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px">
+        Find the problem below. If HSC cannot clean it, log it here and then file it with the City.
+      </p>
+      ${CATEGORIES.map(cat => `
+        <details style="border-top:1px solid var(--border);padding:8px 0">
+          <summary style="cursor:pointer;display:flex;justify-content:space-between;gap:8px">
+            <span>${cat}</span>${whoBadge(cat)}
+          </summary>
+          <div style="font-size:13px;color:var(--text-secondary);padding-top:8px">${guideBody(cat)}</div>
+        </details>`).join('')}
+      <p style="font-size:11px;color:var(--text-muted);margin:8px 0 0">
+        ${FINES_SOURCE} By-law text: City of Hamilton office consolidations, for convenience only. Certified copies come from the City Clerk's Office.
+      </p>
+    </div>`;
+}
 
 function subfieldsFor(cat) {
   switch (cat) {
@@ -154,10 +300,7 @@ function subfieldsFor(cat) {
             <option>Industrial</option>
             <option>Vacant Lot</option>
           </select>
-        </div>
-        <p style="font-size:12px;color:var(--text-muted);margin:0 0 8px">
-          Hamilton By-law 10-118: grass and weeds must not exceed 20 cm (8 in).
-        </p>`;
+        </div>`;
 
     default:
       return '';
@@ -175,6 +318,7 @@ export async function renderBylaw(root) {
     <div class="page-subtitle">Log offenses internally, then file with the City of Hamilton</div>
     <button class="btn btn-primary" id="btn-new-bylaw" style="margin-bottom:16px">+ Log Bylaw Offense</button>
     <div id="bylaw-form-wrap" hidden></div>
+    ${renderGuide()}
     <div class="card">
       <div class="card-title">Recent Reports</div>
       <div id="bylaw-list"><div class="loading">Loading…</div></div>
@@ -210,6 +354,14 @@ function showBylawForm(root) {
       <div class="form-group">
         <label>Address <span class="req">*</span></label>
         <input type="text" id="bf-address" placeholder="Nearest intersection or full address" required>
+      </div>
+
+      <div id="bf-guide" hidden style="font-size:13px;color:var(--text-secondary);border-left:3px solid var(--accent);padding:4px 0 4px 10px;margin-bottom:16px"></div>
+
+      <div class="form-group" id="bf-bylaw-wrap" hidden>
+        <label>Which by-law is broken? <span class="req">*</span></label>
+        <select id="bf-bylaw"></select>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Pick the closest match. Choose "Not sure" if none fit.</div>
       </div>
 
       <div id="bf-subfields"></div>
@@ -250,6 +402,18 @@ function showBylawForm(root) {
   catSel.addEventListener('change', () => {
     const cat = catSel.value;
     subfieldsEl.innerHTML = subfieldsFor(cat);
+    const guideEl = wrap.querySelector('#bf-guide');
+    guideEl.innerHTML = guideBody(cat);
+    guideEl.hidden = !GUIDE[cat];
+
+    // By-law picker: options are the verified offences for this category.
+    const bylawWrap = wrap.querySelector('#bf-bylaw-wrap');
+    const offences  = FINES[cat] || [];
+    bylawWrap.hidden = !offences.length;
+    wrap.querySelector('#bf-bylaw').innerHTML = offences.length ? `
+      <option value="">Select…</option>
+      ${offences.map(([what, sec], i) => `<option value="${i}">${sec} — ${what}</option>`).join('')}
+      <option value="unsure">Not sure / none of these</option>` : '';
 
     if (cat && hasPhoto(cat)) {
       photoWrap.hidden = false;
@@ -401,6 +565,16 @@ async function submitBylaw(root, wrap, photos) {
     }
   }
 
+  if (!err && FINES[cat]) {
+    const pick = wrap.querySelector('#bf-bylaw')?.value;
+    if (!pick) err = 'Please select which by-law is broken, or "Not sure".';
+    else if (pick === 'unsure') fields.bylaw = 'unsure';
+    else {
+      const [offence, section] = FINES[cat][Number(pick)];
+      fields.bylaw = { section, offence };
+    }
+  }
+
   if (err) { showFormError(wrap, err); return; }
 
   const submitBtn = wrap.querySelector('#bf-submit');
@@ -442,15 +616,24 @@ async function submitBylaw(root, wrap, photos) {
     return;
   }
 
+  // Text to paste into the City's form, with the by-law cited.
+  const cite = fields.bylaw && fields.bylaw !== 'unsure'
+    ? `By-law ${fields.bylaw.section}: ${fields.bylaw.offence}.` : '';
+  const cityText = [`${cat} at ${address}.`, cite, details].filter(Boolean).join(' ');
+
   // Replace form with success + city link
   const formWrap = root.querySelector('#bylaw-form-wrap');
   formWrap.innerHTML = `
     <div class="card bylaw-success-card" style="margin-bottom:16px">
       <div style="font-size:22px;margin-bottom:8px">✓</div>
       <div class="card-title" style="margin-bottom:6px">Logged Internally</div>
-      <p style="color:var(--text-secondary);margin-bottom:16px">
-        Now file this with the City of Hamilton to make it official.
+      ${cite ? `<p style="margin-bottom:8px"><strong>${cite}</strong></p>` : ''}
+      <p style="color:var(--text-secondary);margin-bottom:12px">
+        Now file this with the City of Hamilton to make it official. Copy the text below into the City's form.
       </p>
+      <textarea id="bf-city-text" rows="3" readonly style="width:100%;resize:vertical;margin-bottom:8px"></textarea>
+      <button class="btn btn-secondary btn-sm" id="bf-copy" style="margin-bottom:16px">Copy text</button>
+      <br>
       <a href="${CITY_URL}" target="_blank" rel="noopener" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:16px">
         Submit to City of Hamilton
         <span style="font-size:11px;opacity:0.7">↗</span>
@@ -463,6 +646,13 @@ async function submitBylaw(root, wrap, photos) {
     </div>
   `;
 
+  formWrap.querySelector('#bf-city-text').value = cityText;
+  formWrap.querySelector('#bf-copy').addEventListener('click', async () => {
+    const ta = formWrap.querySelector('#bf-city-text');
+    try { await navigator.clipboard.writeText(ta.value); }
+    catch { ta.select(); document.execCommand('copy'); }
+    showToast('✓ Copied');
+  });
   formWrap.querySelector('#bf-log-another').addEventListener('click', () => {
     showBylawForm(root);
     root.querySelector('#btn-new-bylaw').style.display = 'none';
@@ -496,6 +686,7 @@ async function loadBylawList(root) {
         <tr>
           <th>Date</th>
           <th>Category</th>
+          <th>By-law</th>
           <th>Address</th>
           <th>City Confirmation #</th>
           <th>Filed?</th>
@@ -506,6 +697,8 @@ async function loadBylawList(root) {
           <tr>
             <td style="white-space:nowrap">${r.date || '—'}</td>
             <td>${r.category}</td>
+            <td style="white-space:nowrap;font-size:12px" title="${r.fields?.bylaw?.offence || ''}">${
+              r.fields?.bylaw === 'unsure' ? 'Not sure' : (r.fields?.bylaw?.section || '—')}</td>
             <td>${r.address}</td>
             <td style="font-size:12px;font-family:monospace">${r.city_reference || '—'}</td>
             <td>
