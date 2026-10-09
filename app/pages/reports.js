@@ -276,13 +276,27 @@ async function exportWasteCsv(root) {
     ].map(v => JSON.stringify(v ?? '')).join(',');
   });
 
-  const blob = new Blob([[header.join(','), ...lines].join('\n')], { type: 'text/csv' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
+  saveCsv(`hsc-waste-${from || 'all'}-to-${to || localDateStr()}.csv`, [header.join(','), ...lines].join('\n'));
+}
+
+// iPhone Safari saved blank files: revoking the blob URL right after click()
+// frees the data before Safari reads it. On touch devices, hand the file to the
+// share sheet (Save to Files, Mail, etc.); elsewhere download and revoke later.
+async function saveCsv(filename, csv) {
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv' }); // BOM: Excel/Numbers read UTF-8 (— · ×)
+  const file = new File([blob], filename, { type: 'text/csv' });
+  if (matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: filename }); return; }
+    catch (e) { if (e.name === 'AbortError') return; } // cancelled; other errors fall through to download
+  }
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
   a.href     = url;
-  a.download = `hsc-waste-${from || 'all'}-to-${to || localDateStr()}.csv`;
+  a.download = filename;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 async function exportCsv(root, cityOnly) {
@@ -295,11 +309,5 @@ async function exportCsv(root, cityOnly) {
   const csvRows = rows.map(r => cols.map(c => JSON.stringify(r[c] ?? '')).join(','));
   const csv = [header, ...csvRows].join('\n');
 
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = `hsc-graffiti-${cityOnly ? 'city-' : ''}${localDateStr()}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  saveCsv(`hsc-graffiti-${cityOnly ? 'city-' : ''}${localDateStr()}.csv`, csv);
 }
