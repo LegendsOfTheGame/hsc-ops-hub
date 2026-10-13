@@ -292,7 +292,9 @@ function loadPdfLibs() {
 async function saveFile(filename, blob, type) {
   const file = new File([blob], filename, { type });
   if (matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: filename }); return; }
+    // Files only: a title is shared as a separate text item, and "Save to Files"
+    // on iPhone saves it as an extra .txt file next to the real one.
+    try { await navigator.share({ files: [file] }); return; }
     catch (e) { if (e.name === 'AbortError') return; }
   }
   const url = URL.createObjectURL(blob);

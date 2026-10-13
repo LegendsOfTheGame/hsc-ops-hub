@@ -289,7 +289,9 @@ async function saveCsv(filename, csv) {
   const blob = new Blob(['﻿' + csv], { type: 'text/csv' }); // BOM: Excel/Numbers read UTF-8 (— · ×)
   const file = new File([blob], filename, { type: 'text/csv' });
   if (matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: filename }); return; }
+    // Files only: a title is shared as a separate text item, and "Save to Files"
+    // on iPhone saves it as an extra .txt file next to the real one.
+    try { await navigator.share({ files: [file] }); return; }
     catch (e) { if (e.name === 'AbortError') return; } // cancelled; other errors fall through to download
   }
   const url = URL.createObjectURL(blob);
