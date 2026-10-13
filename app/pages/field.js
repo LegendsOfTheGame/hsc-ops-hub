@@ -32,6 +32,7 @@ export const LITTER_ITEMS = [
   { key: 'drink_cups',     label: 'Drink cups',     icon: '🥤' },
   { key: 'clothing',       label: 'Clothing',       icon: '👕' },
   { key: 'ensure_cans',    label: 'Ensure cans',    icon: '🥫' },
+  { key: 'recyclables',    label: 'Recyclables',    icon: '♻️', sub: 'bottles & cans', hint: 'Bottles & cans (2 L, 591 mL, 355 mL)' },
 ];
 
 const FILL_LEVELS     = ['Full', 'Overflowing'];
@@ -188,6 +189,7 @@ export async function renderField(root) {
               <span class="tally-icon">${i.icon}</span>
               <span class="tally-count" id="tally-${i.key}">0</span>
               <span class="tally-label">${i.label}</span>
+              ${i.sub ? `<span class="tally-brands">${i.sub.replace('&', '&amp;')}</span>` : ''}
               ${i.brands ? `<span class="tally-brands" id="tally-brands-${i.key}"></span>` : ''}
             </button>
             <button class="tally-undo" data-key="${i.key}" aria-label="Remove one ${i.label}">−1</button>

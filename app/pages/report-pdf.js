@@ -188,7 +188,7 @@ function buildReport(mode, date, allBags, allBins, allShifts) {
         <thead><tr><th>Item</th><th class="r">Count</th><th>Breakdown</th></tr></thead>
         <tbody>${s.items.filter(i => i.total).map(i => `<tr>
           <td>${i.icon} ${i.label}</td><td class="r">${i.total}</td>
-          <td>${i.byBrand.filter(b => b.total).map(b => `${esc(b.name)} ${b.total}`).join(' · ') || ''}</td>
+          <td>${i.byBrand.filter(b => b.total).map(b => `${esc(b.name)} ${b.total}`).join(' · ') || esc(i.hint || '')}</td>
         </tr>`).join('')}</tbody>
       </table></div>
       <div class="pr-foot">Counted by hand while filling ${s.tallied} of ${s.count} bags.</div>
@@ -411,7 +411,7 @@ async function buildPdf(ctx) {
   if (s.tallied) {
     heading('Items found');
     table(['Item', 'Count', 'Breakdown'],
-      s.items.filter(i => i.total).map(i => [i.label, i.total, pdfText(i.byBrand.filter(b => b.total).map(b => `${b.name} ${b.total}`).join(' · '))]),
+      s.items.filter(i => i.total).map(i => [i.label, i.total, pdfText(i.byBrand.filter(b => b.total).map(b => `${b.name} ${b.total}`).join(' · ') || i.hint || '')]),
       { columnStyles: { 1: right } });
     note(`Counted by hand while filling ${s.tallied} of ${s.count} bags.`);
   }
