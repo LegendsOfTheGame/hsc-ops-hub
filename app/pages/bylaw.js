@@ -1,5 +1,5 @@
 import { select, insert, update } from '../db.js';
-import { showToast, localDateStr, openModal, closeModal } from '../utils.js';
+import { showToast, localDateStr, openModal, closeModal, shrinkPhoto } from '../utils.js';
 import { FINES, FINES_SOURCE } from '../bylaw-fines.js';
 
 const IMGBB_KEY = '2972e511acdd923ba33c1bedd2af2ae7';
@@ -307,10 +307,10 @@ function subfieldsFor(cat) {
   }
 }
 
-const PHOTO_CATS = ['Illegal Dumping', 'Graffiti', 'Illegal Parking', 'Litter or Debris', 'Overgrown Vegetation'];
+// Every category can take photos (posters on poles are filed under "Other").
 const photoRequired = cat => cat === 'Illegal Dumping';
-const maxPhotos     = cat => cat === 'Illegal Dumping' ? 5 : 1;
-const hasPhoto      = cat => PHOTO_CATS.includes(cat);
+const maxPhotos     = cat => cat === 'Illegal Dumping' ? 5 : 3;
+const hasPhoto      = cat => Boolean(cat);
 
 export async function renderBylaw(root) {
   root.innerHTML = `
@@ -376,7 +376,7 @@ function showBylawForm(root) {
           <label id="bf-photo-label">Attach Photo</label>
           <div class="photo-grid" id="bf-photo-grid"></div>
           <button type="button" class="btn btn-sm btn-secondary" id="bf-add-photo" style="margin-top:8px">+ Add Photo</button>
-          <input type="file" id="bf-photo-input" accept="image/*" capture="environment" style="display:none">
+          <input type="file" id="bf-photo-input" accept="image/*" style="display:none">
         </div>
       </div>
 
@@ -420,8 +420,8 @@ function showBylawForm(root) {
       const req  = photoRequired(cat);
       const maxP = maxPhotos(cat);
       photoLabel.innerHTML = req
-        ? `Photos <span class="req">*</span> <span style="font-size:11px;font-weight:400">(1 required, up to ${maxP} · JPG/PNG max 10 MB)</span>`
-        : `Attach Photo <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(optional · JPG/PNG max 10 MB)</span>`;
+        ? `Photos <span class="req">*</span> <span style="font-size:11px;font-weight:400">(1 required, up to ${maxP} · camera or photo library)</span>`
+        : `Attach Photo <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(optional, up to ${maxP} · camera or photo library)</span>`;
       addPhotoBtn.hidden = photos.length >= maxP;
     } else {
       photoWrap.hidden = true;
@@ -448,23 +448,18 @@ function showBylawForm(root) {
 
   addPhotoBtn.addEventListener('click', () => photoInput.click());
 
-  photoInput.addEventListener('change', () => {
+  // Any size works: photos are shrunk to ≤1600px JPEG before upload (new iPhones exceed 10 MB)
+  photoInput.addEventListener('change', async () => {
     const file = photoInput.files[0];
     if (!file) return;
     photoInput.value = '';
-
-    if (file.size > 10 * 1024 * 1024) {
-      showFormError(wrap, 'Photo is too large — maximum is 10 MB.');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = e => {
-      const result = e.target.result;
-      photos.push({ base64: result.split(',')[1], preview: result });
+    try {
+      const dataUrl = await shrinkPhoto(file);
+      photos.push({ base64: dataUrl.split(',')[1], preview: dataUrl });
       renderPhotoGrid();
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      showFormError(wrap, 'Could not read that photo. Try another, or take a new one.');
+    }
   });
 
   const cancelFn = () => {
