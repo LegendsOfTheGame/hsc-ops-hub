@@ -216,7 +216,7 @@ create table if not exists field_logs (
   item_counts     jsonb,         -- bag_drop: item tally, e.g. {"coffee_cups":3,"food_packaging":2,"clothing":1,"brands":{"coffee_cups":{"Tim Hortons":2,"Other":1},...}}
   fill_level      text,          -- bin_full: 'Full' | 'Overflowing'
   container_type  text,          -- bin_full: 'City litter bin' | 'Recycling bin' | 'Business bin' | 'Other'
-  image_url       text,          -- bag_drop: required photo (bag on scale); graffiti: optional photo
+  image_url       text,          -- bag_drop: required photo of the full bag; graffiti: optional photo
   notes           text,
   status          text default 'Pending',
   created_at      timestamptz default now()

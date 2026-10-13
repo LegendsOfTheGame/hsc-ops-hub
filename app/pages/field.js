@@ -400,7 +400,7 @@ function openBagModal(root) {
           <input type="file" id="bag-photo-input" accept="image/*" capture="environment" style="display:none">
           <img id="bag-photo-img" hidden style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
         </div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Bag on the luggage scale with the reading visible</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">The full bag where you left it</div>
       </div>
       <div class="form-row">
         <div class="form-group">
