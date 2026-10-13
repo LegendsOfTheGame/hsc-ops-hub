@@ -458,8 +458,14 @@ html, body {
 .current-bag-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .current-bag-timer { font-size: 15px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
 .tally-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-@media (max-width: 500px) { .tally-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 500px) {
+  .tally-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .tally-btn { padding: 8px 4px; }
+  .tally-icon, .tally-count { font-size: 20px; }
+  .tally-brands { font-size: 9px; }
+}
 .tally-item { display: flex; flex-direction: column; gap: 4px; }
+.tally-item .tally-btn { flex: 1; justify-content: center; }
 .tally-btn {
   background: var(--bg-input);
   border: 1px solid var(--border);

@@ -33,6 +33,7 @@ export const LITTER_ITEMS = [
   { key: 'clothing',       label: 'Clothing',       icon: '👕' },
   { key: 'ensure_cans',    label: 'Ensure cans',    icon: '🥫' },
   { key: 'recyclables',    label: 'Recyclables',    icon: '♻️', sub: 'bottles & cans', hint: 'Bottles & cans (2 L, 591 mL, 355 mL)' },
+  { key: 'drug_pipes',     label: 'Drug pipes',     icon: '⚠️', sub: 'crack / meth pipes', hint: 'Crack pipes & meth (bubble) pipes' },
 ];
 
 const FILL_LEVELS     = ['Full', 'Overflowing'];
