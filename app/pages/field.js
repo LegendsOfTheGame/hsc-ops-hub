@@ -137,6 +137,7 @@ export function countItems(counts) {
 }
 
 let bagTicker = null;
+let refreshBagCard = () => {}; // redraws the Current Bag card; set while the Field page is open
 
 const IMGBB_KEY = '2972e511acdd923ba33c1bedd2af2ae7';
 const IMGBB_URL = 'https://api.imgbb.com/1/upload';
@@ -264,8 +265,9 @@ function mountCurrentBag(root) {
   // Timer text only — cheap, runs on the interval. Counters redraw only on taps.
   function refreshTimer() {
     if (!timerEl.isConnected) {
-      clearInterval(bagTicker); bagTicker = null;
-      document.removeEventListener('visibilitychange', refreshTimer);
+      if (refreshBagCard === refresh) { clearInterval(bagTicker); bagTicker = null; }
+      document.removeEventListener('visibilitychange', onVisible);
+      if (refreshBagCard === refresh) refreshBagCard = () => {};
       return;
     }
     if (document.hidden) return;
@@ -313,9 +315,12 @@ function mountCurrentBag(root) {
   // Minute display, refreshed every 15s and on returning to the app
   // (battery: the old 1-second redraw of the whole card kept the phone busy).
   // Locking the phone is fine — elapsed time comes from the saved start time.
+  function onVisible() { if (!document.hidden) refresh(); }
+
   clearInterval(bagTicker);
   bagTicker = setInterval(refreshTimer, 15_000);
-  document.addEventListener('visibilitychange', refreshTimer);
+  document.addEventListener('visibilitychange', onVisible);
+  refreshBagCard = refresh;
   refresh();
 }
 
@@ -579,6 +584,7 @@ function openBagModal(root) {
       }
 
       startNewBag(); // the next bag starts now
+      refreshBagCard(); // counters back to 0 on screen
       closeModal();
       loadFieldHistory(root, today);
     });
