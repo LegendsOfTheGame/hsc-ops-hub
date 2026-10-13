@@ -12,7 +12,9 @@ const MONTH_NAMES = ['January','February','March','April','May','June','July','A
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const n1  = v => (+v.toFixed(1)).toLocaleString('en-CA');
-const kgLb = kg => `${n1(kg)} kg <span class="pr-muted">(${n1(kg * LB_PER_KG)} lb)</span>`;
+// Weights always shown in both units, pounds first, same size
+const lbKg = kg => `${n1(kg * LB_PER_KG)} lb / ${n1(kg)} kg`;
+const kgLb = kg => `<span class="pr-w">${n1(kg * LB_PER_KG)} lb</span><span class="pr-w">${n1(kg)} kg</span>`;
 
 function parseLocal(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -135,7 +137,7 @@ function buildReport(mode, date, allBags, allBins, allShifts) {
   // Headline numbers
   html += `<section class="pr-tiles">
     <div class="pr-tile"><div class="pr-num">${s.count}</div><div class="pr-lbl">bags collected</div><div class="pr-note">${n1(s.eq)} orange-equivalent</div></div>
-    <div class="pr-tile"><div class="pr-num">${s.weighed ? `${n1(s.kg)} kg` : '—'}</div><div class="pr-lbl">weighed</div><div class="pr-note">${s.weighed ? `${n1(s.kg * LB_PER_KG)} lb · ${s.weighed} of ${s.count} bags` : 'no bags weighed'}</div></div>
+    <div class="pr-tile"><div class="pr-num">${s.weighed ? `${n1(s.kg * LB_PER_KG)} lb<br>${n1(s.kg)} kg` : '—'}</div><div class="pr-lbl">weighed</div><div class="pr-note">${s.weighed ? `${s.weighed} of ${s.count} bags` : 'no bags weighed'}</div></div>
     <div class="pr-tile"><div class="pr-num">${s.timed ? `${Math.round(s.minutes / s.timed)} min` : '—'}</div><div class="pr-lbl">average per bag</div><div class="pr-note">${s.timed ? `${n1(s.minutes / 60)} hrs on bags` : 'no bags timed'}</div></div>
     <div class="pr-tile"><div class="pr-num">${bins.length}</div><div class="pr-lbl">full bins found</div><div class="pr-note">${bins.filter(b => b.fill_level === 'Overflowing').length} overflowing</div></div>
     ${shiftHours ? `<div class="pr-tile"><div class="pr-num">${n1(shiftHours)}</div><div class="pr-lbl">shift hours</div><div class="pr-note">${shifts.length} shift${shifts.length === 1 ? '' : 's'} logged</div></div>` : ''}
@@ -172,7 +174,7 @@ function buildReport(mode, date, allBags, allBins, allShifts) {
           const ds = summarize(db);
           return `<tr><td>${DAY_NAMES[parseLocal(day).getDay()].slice(0, 3)} ${parseLocal(day).getDate()}</td>
             ${ds.byColor.map(c => `<td class="r">${c.count || '—'}</td>`).join('')}
-            <td class="r">${ds.weighed ? `${n1(ds.kg)} kg` : '—'}</td><td class="r">${dn || '—'}</td>
+            <td class="r">${ds.weighed ? kgLb(ds.kg) : '—'}</td><td class="r">${dn || '—'}</td>
             <td class="r">${countItems(Object.fromEntries(ds.items.map(i => [i.key, i.total]))) || '—'}</td></tr>`;
         }).join('')}</tbody>
       </table></div></section>`;
@@ -212,7 +214,7 @@ function buildReport(mode, date, allBags, allBins, allShifts) {
         return `<figure>
           ${r.image_url ? `<a href="${esc(r.image_url)}"><img src="${esc(r.image_url)}" alt="Bag ${idx + 1}"></a>` : '<div class="pr-nophoto">No photo</div>'}
           <figcaption><strong>#${idx + 1}</strong> ${mode === 'week' ? `${DAY_NAMES[parseLocal(r.date || r.logged_at.slice(0, 10)).getDay()].slice(0, 3)} ` : ''}${fmtTime(r.logged_at)} · ${esc(r.bag_color || 'Orange')}
-            <br>${kg > 0 ? `${n1(kg)} kg / ${n1(kg * LB_PER_KG)} lb` : 'not weighed'}${parseFloat(r.bag_minutes) > 0 ? ` · ${Math.round(r.bag_minutes)} min` : ''}</figcaption>
+            <br>${kg > 0 ? lbKg(kg) : 'not weighed'}${parseFloat(r.bag_minutes) > 0 ? ` · ${Math.round(r.bag_minutes)} min` : ''}</figcaption>
         </figure>`;
       }).join('')}</div>
     </section>`;

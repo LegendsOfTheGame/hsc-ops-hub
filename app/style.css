@@ -901,6 +901,7 @@ body.printing { overflow: hidden; }
 .pr-num { font-size: 22px; font-weight: 700; line-height: 1.1; }
 .pr-lbl { font-size: 12px; color: #333; }
 .pr-note, .pr-muted { font-size: 11px; color: #666; }
+.pr-w { display: block; }
 .pr-page h2 { font-size: 14px; margin: 18px 0 6px; padding-bottom: 3px; border-bottom: 1px solid #d8dce3; }
 .pr-table { width: 100%; border-collapse: collapse; }
 .pr-table th, .pr-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #eceef2; vertical-align: top; }
@@ -919,7 +920,6 @@ body.printing { overflow: hidden; }
   .pr-page { margin: 0; padding: 18px 16px; box-shadow: none; }
   .pr-head { flex-direction: column; } .pr-gen { text-align: left; }
   .pr-table { font-size: 12px; } .pr-table th, .pr-table td { padding: 5px 4px; }
-  .pr-table .pr-muted { display: block; }
 }
 @media print {
   @page { margin: 12mm; }

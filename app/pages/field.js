@@ -354,10 +354,9 @@ function typeLabel(r) {
   }
 }
 
-// Shows kg plus the unit the user weighs in, e.g. "4.5 kg (9.9 lb)"
+// Weights are always shown in both units, pounds first
 function fmtWeight(kg) {
-  const k = `${+kg.toFixed(1)} kg`;
-  return getWeightUnit() === 'lb' ? `${+(kg * LB_PER_KG).toFixed(1)} lb (${k})` : k;
+  return `${+(kg * LB_PER_KG).toFixed(1)} lb / ${+kg.toFixed(1)} kg`;
 }
 
 function now() {

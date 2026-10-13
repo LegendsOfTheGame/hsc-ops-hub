@@ -56,7 +56,7 @@ function fieldSummary(date) {
   const f = fieldByDate[date];
   if (!f) return '—';
   const parts = [];
-  if (f.bag_drop) parts.push(`${+f.bag_drop.toFixed(2)} bag${f.bag_drop !== 1 ? 's' : ''}${f.weight_kg ? ` (${+f.weight_kg.toFixed(1)} kg)` : ''}`);
+  if (f.bag_drop) parts.push(`${+f.bag_drop.toFixed(2)} bag${f.bag_drop !== 1 ? 's' : ''}${f.weight_kg ? ` (${+(f.weight_kg * 2.20462).toFixed(1)} lb / ${+f.weight_kg.toFixed(1)} kg)` : ''}`);
   if (f.bin_full) parts.push(`${f.bin_full} full bin${f.bin_full !== 1 ? 's' : ''}`);
   if (f.graffiti) parts.push(`${f.graffiti} graffiti`);
   return parts.length ? parts.join(' · ') : '—';

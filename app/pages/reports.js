@@ -176,8 +176,8 @@ function renderWaste(root) {
 
   let html = `<div class="waste-stats">
     ${stat(n1(w.bagsEq), 'bags collected', `orange-equivalent · ${n0(w.bagCount)} actual bags · ${n0(w.photoCount)} with photos`)}
-    ${w.weighedCount ? stat(`${n0(w.estKg)} kg`, `litter removed (${n0(w.estKg * LB_PER_KG)} lb)`, estNote(w.weighedCount, w.bagCount, 'weighed')) : stat('—', 'litter weight', 'no bags weighed yet')}
-    ${w.weighedCount ? stat(`${n1(w.kgPerEq)} kg`, 'average per bag', `${n1(w.kgPerEq * LB_PER_KG)} lb · orange bag`) : ''}
+    ${w.weighedCount ? stat(`${n0(w.estKg * LB_PER_KG)} lb / ${n0(w.estKg)} kg`, 'litter removed', estNote(w.weighedCount, w.bagCount, 'weighed')) : stat('—', 'litter weight', 'no bags weighed yet')}
+    ${w.weighedCount ? stat(`${n1(w.kgPerEq * LB_PER_KG)} lb / ${n1(w.kgPerEq)} kg`, 'average per bag', 'orange bag') : ''}
     ${w.timedCount ? stat(`${n0(w.avgMin)} min`, 'average per bag', `≈ ${n1(w.estHours)} hrs on litter · ${estNote(w.timedCount, w.bagCount, 'timed')}`) : stat('—', 'time per bag', 'no bags timed yet')}
     ${stat(n0(w.binCount), 'full bins found', w.overflowing ? `${n0(w.overflowing)} overflowing` : '')}
   </div>`;
@@ -205,7 +205,7 @@ function renderWaste(root) {
     return `<tr>
       <td>${MONTHS[+mo - 1] || '—'} ${y || ''}</td>
       <td>${n1(c.bagsEq)}</td>
-      <td>${c.weighedCount ? `${n1(c.weighedKg)} kg <span style="color:var(--text-muted)">(${c.weighedCount})</span>` : '—'}</td>
+      <td>${c.weighedCount ? `${n1(c.weighedKg * LB_PER_KG)} lb / ${n1(c.weighedKg)} kg <span style="color:var(--text-muted)">(${c.weighedCount})</span>` : '—'}</td>
       <td>${c.timedCount ? `${n0(c.avgMin)} min` : '—'}</td>
       <td>${c.binCount}${c.overflowing ? ` <span style="color:var(--text-muted)">(${c.overflowing} over)</span>` : ''}</td>
       ${LITTER_ITEMS.map(i => `<td>${c.countedCount ? n0(c.items.find(x => x.key === i.key).total) : '—'}</td>`).join('')}
@@ -237,7 +237,7 @@ function renderWaste(root) {
       const b = parseFloat(budgetEl.value) || 0;
       const parts = [];
       if (w.bagsEq) parts.push(`<strong>${money(b / w.bagsEq)}</strong> per bag`);
-      if (w.estKg)  parts.push(`<strong>${money(b / w.estKg)}</strong> per kg`);
+      if (w.estKg)  parts.push(`<strong>${money(b / (w.estKg * LB_PER_KG))}</strong> per lb`, `<strong>${money(b / w.estKg)}</strong> per kg`);
       if (w.estHours) parts.push(`<strong>${money(b / w.estHours)}</strong> per hour of litter work`);
       out.innerHTML = parts.length ? parts.join(' · ') : 'Not enough data yet.';
     };
