@@ -1007,8 +1007,10 @@ def upload_image_to_imgbb(image_path):
 
 # ========== BUFFER ==========
 
-def send_to_buffer(post_text, image_url=None, immediate=False):
-    mode = "shareNow" if immediate else "addToQueue"
+def send_to_buffer(post_text, image_url=None, immediate=False, due_at=None):
+    """due_at: ISO 8601 UTC timestamp to schedule for a specific time instead of the queue."""
+    mode = "customScheduled" if due_at else ("shareNow" if immediate else "addToQueue")
+    due = f' dueAt: "{due_at}"' if due_at else ""
     log.info("Sending to Buffer %s...", mode)
     if image_url:
         log.info("Including image: %s", image_url)
@@ -1016,7 +1018,7 @@ def send_to_buffer(post_text, image_url=None, immediate=False):
     # image: singular object — Buffer renamed from images:[...] to image:{...}
     mutation_with_image = f"""
     mutation CreatePost($channelId: ChannelId!, $text: String!, $imageUrl: String!) {{
-        createPost(input: {{ channelId: $channelId text: $text schedulingType: automatic mode: {mode} assets: {{ image: {{url: $imageUrl}} }} }}) {{
+        createPost(input: {{ channelId: $channelId text: $text schedulingType: automatic mode: {mode}{due} assets: {{ image: {{url: $imageUrl}} }} }}) {{
             ... on PostActionSuccess {{ post {{ id text }} }}
             ... on MutationError {{ message }}
         }}
@@ -1024,7 +1026,7 @@ def send_to_buffer(post_text, image_url=None, immediate=False):
 
     mutation_standard = f"""
     mutation CreatePost($channelId: ChannelId!, $text: String!) {{
-        createPost(input: {{ channelId: $channelId text: $text schedulingType: automatic mode: {mode} }}) {{
+        createPost(input: {{ channelId: $channelId text: $text schedulingType: automatic mode: {mode}{due} }}) {{
             ... on PostActionSuccess {{ post {{ id text }} }}
             ... on MutationError {{ message }}
         }}
@@ -1032,7 +1034,7 @@ def send_to_buffer(post_text, image_url=None, immediate=False):
 
     mutation_facebook_image = f"""
     mutation CreatePost($channelId: ChannelId!, $text: String!, $imageUrl: String!) {{
-        createPost(input: {{ channelId: $channelId text: $text schedulingType: automatic mode: {mode} metadata: {{ facebook: {{ type: post }} }} assets: {{ image: {{url: $imageUrl}} }} }}) {{
+        createPost(input: {{ channelId: $channelId text: $text schedulingType: automatic mode: {mode}{due} metadata: {{ facebook: {{ type: post }} }} assets: {{ image: {{url: $imageUrl}} }} }}) {{
             ... on PostActionSuccess {{ post {{ id text }} }}
             ... on MutationError {{ message }}
         }}
@@ -1040,7 +1042,7 @@ def send_to_buffer(post_text, image_url=None, immediate=False):
 
     mutation_facebook = f"""
     mutation CreatePost($channelId: ChannelId!, $text: String!) {{
-        createPost(input: {{ channelId: $channelId text: $text schedulingType: automatic mode: {mode} metadata: {{ facebook: {{ type: post }} }} }}) {{
+        createPost(input: {{ channelId: $channelId text: $text schedulingType: automatic mode: {mode}{due} metadata: {{ facebook: {{ type: post }} }} }}) {{
             ... on PostActionSuccess {{ post {{ id text }} }}
             ... on MutationError {{ message }}
         }}
@@ -1048,7 +1050,7 @@ def send_to_buffer(post_text, image_url=None, immediate=False):
 
     mutation_instagram_image = f"""
     mutation CreatePost($channelId: ChannelId!, $text: String!, $imageUrl: String!) {{
-        createPost(input: {{ channelId: $channelId text: $text schedulingType: automatic mode: {mode} metadata: {{ instagram: {{ type: post shouldShareToFeed: true }} }} assets: {{ image: {{url: $imageUrl}} }} }}) {{
+        createPost(input: {{ channelId: $channelId text: $text schedulingType: automatic mode: {mode}{due} metadata: {{ instagram: {{ type: post shouldShareToFeed: true }} }} assets: {{ image: {{url: $imageUrl}} }} }}) {{
             ... on PostActionSuccess {{ post {{ id text }} }}
             ... on MutationError {{ message }}
         }}
@@ -1056,7 +1058,7 @@ def send_to_buffer(post_text, image_url=None, immediate=False):
 
     mutation_instagram = f"""
     mutation CreatePost($channelId: ChannelId!, $text: String!) {{
-        createPost(input: {{ channelId: $channelId text: $text schedulingType: automatic mode: {mode} metadata: {{ instagram: {{ type: post shouldShareToFeed: true }} }} }}) {{
+        createPost(input: {{ channelId: $channelId text: $text schedulingType: automatic mode: {mode}{due} metadata: {{ instagram: {{ type: post shouldShareToFeed: true }} }} }}) {{
             ... on PostActionSuccess {{ post {{ id text }} }}
             ... on MutationError {{ message }}
         }}

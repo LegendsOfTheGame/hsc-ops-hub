@@ -7,6 +7,7 @@ JSON fields:
   image          path to the image, relative to the repo root
   caption        full caption (Instagram, Facebook, Threads)
   caption_short  optional caption for X and Bluesky (280/300 char limits)
+  due_at         optional ISO 8601 UTC time to publish at (default: next queue slot)
 """
 
 import json
@@ -36,7 +37,7 @@ def queue_post(spec_path):
     for channels, text in ((long_channels, caption), (short_channels, short)):
         weather.BUFFER_CHANNELS = channels
         try:
-            posted += weather.send_to_buffer(text, image_url, immediate=False)
+            posted += weather.send_to_buffer(text, image_url, due_at=spec.get("due_at"))
         except RuntimeError as e:
             weather.log.error("%s", e)
     if not posted:
