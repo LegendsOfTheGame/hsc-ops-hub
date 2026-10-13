@@ -57,7 +57,7 @@ export function reportCardHtml() {
         <div class="toolbar-spacer"></div>
         <button class="btn btn-primary" id="pr-open">Open Report</button>
       </div>
-      <div style="font-size:12px;color:var(--text-muted)">Bags by colour and weight, time, items found, full bins and bag photos. Tap <strong>Save PDF</strong> on the report to save it or send it straight from your phone.</div>
+      <div style="font-size:12px;color:var(--text-muted)">Bags by colour and weight, time, items found, full bins and a bag-by-bag log. Tap <strong>Save PDF</strong> on the report to save it or send it straight from your phone.</div>
     </div>`;
 }
 
@@ -207,21 +207,24 @@ function buildReport(mode, date, allBags, allBins, allShifts) {
       </table></div></section>`;
   }
 
-  // Bag log + photo evidence
+  // Bag log (photos stay in the app as evidence; not printed)
   if (bags.length) {
-    html += `<section class="pr-break"><h2>Bag log &amp; photos</h2>
-      <div class="pr-photos">${bags.map((r, idx) => {
-        const kg = parseFloat(r.bag_weight_kg);
-        return `<figure>
-          ${r.image_url ? `<a href="${esc(r.image_url)}"><img src="${esc(r.image_url)}" alt="Bag ${idx + 1}"></a>` : '<div class="pr-nophoto">No photo</div>'}
-          <figcaption><strong>#${idx + 1}</strong> ${mode === 'week' ? `${DAY_NAMES[parseLocal(r.date || r.logged_at.slice(0, 10)).getDay()].slice(0, 3)} ` : ''}${fmtTime(r.logged_at)} · ${esc(r.bag_color || 'Orange')}
-            <br>${kg > 0 ? lbKg(kg) : 'not weighed'}${parseFloat(r.bag_minutes) > 0 ? ` · ${Math.round(r.bag_minutes)} min` : ''}</figcaption>
-        </figure>`;
-      }).join('')}</div>
+    html += `<section><h2>Bag log</h2>
+      <div class="pr-scroll"><table class="pr-table">
+        <thead><tr><th>#</th><th>${mode === 'week' ? 'Day / time' : 'Time'}</th><th>Colour</th><th class="r">Weight</th><th class="r">Time on bag</th></tr></thead>
+        <tbody>${bags.map((r, idx) => {
+          const kg = parseFloat(r.bag_weight_kg);
+          return `<tr><td>${idx + 1}</td>
+            <td>${mode === 'week' ? `${DAY_NAMES[parseLocal(r.date || r.logged_at.slice(0, 10)).getDay()].slice(0, 3)} ` : ''}${fmtTime(r.logged_at)}</td>
+            <td>${esc(r.bag_color || 'Orange')}</td>
+            <td class="r">${kg > 0 ? lbKg(kg) : 'not weighed'}</td>
+            <td class="r">${parseFloat(r.bag_minutes) > 0 ? `${Math.round(r.bag_minutes)} min` : '—'}</td></tr>`;
+        }).join('')}</tbody>
+      </table></div>
     </section>`;
   }
 
-  html += `<footer class="pr-method">Each bag is logged in the field as it is filled: bag colour, a photo of the bag on a luggage scale showing the reading, time spent filling it, GPS location and a hand tally of items found. Full bins are logged with GPS when found. Source data and photos are available on request.</footer>`;
+  html += `<footer class="pr-method">Each bag is weighed on a luggage scale and logged in the field as it is filled: bag colour, weight, time spent filling it, GPS location and a hand tally of items found. Full bins are logged with GPS when found. A timestamped photo of every bag is kept on file and is available on request.</footer>`;
   return { html, from, to, ctx };
 }
 
@@ -302,28 +305,6 @@ async function saveFile(filename, blob, type) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
-// Fetch a bag photo and shrink it for embedding; null if it can't be read
-// (offline, or the image host refuses cross-origin reads) — the PDF then links to it.
-async function photoForPdf(url, maxSide = 600) {
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 15000);
-    const res = await fetch(url, { mode: 'cors', signal: ctrl.signal });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    const bmp = await createImageBitmap(await res.blob());
-    const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(bmp.width * scale);
-    canvas.height = Math.round(bmp.height * scale);
-    const g = canvas.getContext('2d');
-    g.fillStyle = '#fff';
-    g.fillRect(0, 0, canvas.width, canvas.height);
-    g.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-    return { data: canvas.toDataURL('image/jpeg', 0.75), w: canvas.width, h: canvas.height };
-  } catch { return null; }
-}
-
 // Standard PDF fonts can't draw emoji or some symbols
 const pdfText = s => String(s ?? '').replace(/[^\x20-\x7E -ÿ–—‘’“”•·×]/g, '').trim();
 const lbKgPdf = kg => `${n1(kg * LB_PER_KG)} lb / ${n1(kg)} kg`;
@@ -332,7 +313,6 @@ const dayShort = r => DAY_NAMES[parseLocal(r.date || r.logged_at.slice(0, 10)).g
 async function buildPdf(ctx) {
   const { jsPDF, autoTable } = await loadPdfLibs();
   const { mode, from, to, title, subtitle, bags, bins, shifts, shiftHours, s } = ctx;
-  const photos = await Promise.all(bags.map(r => r.image_url ? photoForPdf(r.image_url) : null));
 
   const doc = new jsPDF({ unit: 'pt', format: 'letter' });
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 40;
@@ -451,37 +431,19 @@ async function buildPdf(ctx) {
         columnStyles: { 3: { textColor: [29, 79, 145] } } });
   }
 
-  // Bag log & photos — 4 per row; each photo links to the full-size original
+  // Bag log (photos stay in the app as evidence; not printed)
   if (bags.length) {
-    doc.addPage(); y = M;
-    doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(...INK).text('Bag log & photos', M, y);
-    y += 10;
-    const cols = 4, pg = 10, cw = (W - 2 * M - pg * (cols - 1)) / cols, ch = cw * 0.75, rowH = ch + 30;
-    bags.forEach((r, idx) => {
-      const col = idx % cols;
-      if (col === 0) { if (idx) y += rowH; ensure(rowH); }
-      const x = M + col * (cw + pg);
-      const p = photos[idx];
-      if (p) {
-        const sc = Math.min(cw / p.w, ch / p.h), iw = p.w * sc, ih = p.h * sc;
-        doc.addImage(p.data, 'JPEG', x + (cw - iw) / 2, y + (ch - ih) / 2, iw, ih);
-      } else {
-        doc.setFillColor(245, 246, 248).rect(x, y, cw, ch, 'F');
-        doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...GREY)
-          .text(r.image_url ? 'Photo — tap to view' : 'No photo', x + cw / 2, y + ch / 2, { align: 'center' });
-      }
-      doc.setDrawColor(...LINE).setLineWidth(0.5).rect(x, y, cw, ch);
-      if (r.image_url) doc.link(x, y, cw, ch, { url: r.image_url });
-      const kg = parseFloat(r.bag_weight_kg);
-      doc.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(...INK)
-        .text(`#${idx + 1}  ${mode === 'week' ? dayShort(r) + ' ' : ''}${fmtTime(r.logged_at)} · ${r.bag_color || 'Orange'}`, x, y + ch + 10);
-      doc.setFont('helvetica', 'normal').setTextColor(60, 60, 60)
-        .text(`${kg > 0 ? lbKgPdf(kg) : 'not weighed'}${parseFloat(r.bag_minutes) > 0 ? ` · ${Math.round(r.bag_minutes)} min` : ''}`, x, y + ch + 20);
-    });
-    y += rowH;
+    heading('Bag log');
+    table(['#', mode === 'week' ? 'Day / time' : 'Time', 'Colour', 'Weight', 'Time on bag'],
+      bags.map((r, idx) => {
+        const kg = parseFloat(r.bag_weight_kg);
+        return [idx + 1, `${mode === 'week' ? dayShort(r) + ' ' : ''}${fmtTime(r.logged_at)}`, r.bag_color || 'Orange',
+          kg > 0 ? lbKgPdf(kg) : 'not weighed', parseFloat(r.bag_minutes) > 0 ? `${Math.round(r.bag_minutes)} min` : '—'];
+      }),
+      { columnStyles: { 0: { cellWidth: 24 }, 3: right, 4: right } });
   }
 
-  note('Each bag is logged in the field as it is filled: bag colour, a photo of the bag on a luggage scale showing the reading, time spent filling it, GPS location and a hand tally of items found. Full bins are logged with GPS when found. Tap a photo to open the full-size original. Source data is available on request.');
+  note('Each bag is weighed on a luggage scale and logged in the field as it is filled: bag colour, weight, time spent filling it, GPS location and a hand tally of items found. Full bins are logged with GPS when found. A timestamped photo of every bag is kept on file and is available on request.');
 
   // Page numbers
   const pages = doc.getNumberOfPages();
