@@ -81,7 +81,13 @@ export function isAuthenticated() {
 }
 
 // Call on every user interaction to reset inactivity timer
+// Scroll/touch fire many times a second; the 60-min timeout only needs
+// minute-level accuracy, so record activity at most every 15 seconds.
+let lastPing = 0;
 export function pingActivity() {
+  const now = Date.now();
+  if (now - lastPing < 15_000) return;
+  lastPing = now;
   if (loadSession()) touchActivity();
 }
 
@@ -102,7 +108,7 @@ export async function logout() {
 
 export function startActivityWatcher(onTimeout) {
   // Reset timer on any user interaction
-  const events = ['click','keydown','mousemove','touchstart','scroll'];
+  const events = ['click','keydown','touchstart','scroll'];
   events.forEach(e => document.addEventListener(e, pingActivity, { passive: true }));
 
   // Check every 30 seconds

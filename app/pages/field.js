@@ -128,8 +128,8 @@ function getWeightUnit() {
 
 function fmtElapsed(ms) {
   const m = Math.floor(ms / 60000);
-  const s = Math.floor((ms % 60000) / 1000);
-  return `${m}:${String(s).padStart(2, '0')}`;
+  if (m < 1) return 'under 1 min';
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
 }
 
 export function countItems(counts) {
@@ -261,8 +261,14 @@ function mountCurrentBag(root) {
   const timerEl = root.querySelector('#bag-timer');
   const restart = root.querySelector('#bag-restart');
 
-  function refresh() {
-    if (!timerEl.isConnected) { clearInterval(bagTicker); bagTicker = null; return; }
+  // Timer text only — cheap, runs on the interval. Counters redraw only on taps.
+  function refreshTimer() {
+    if (!timerEl.isConnected) {
+      clearInterval(bagTicker); bagTicker = null;
+      document.removeEventListener('visibilitychange', refreshTimer);
+      return;
+    }
+    if (document.hidden) return;
     const bag = getCurrentBag();
     if (bag.start) {
       timerEl.textContent = `⏱ ${fmtElapsed(Date.now() - new Date(bag.start).getTime())} on this bag`;
@@ -271,6 +277,11 @@ function mountCurrentBag(root) {
       timerEl.textContent = 'Not started — tap Start Bag or tally an item';
       restart.textContent = 'Start Bag';
     }
+  }
+
+  function refresh() {
+    refreshTimer();
+    const bag = getCurrentBag();
     for (const i of LITTER_ITEMS) {
       const el = root.querySelector(`#tally-${i.key}`);
       if (el) el.textContent = bag.counts[i.key] || 0;
@@ -299,8 +310,12 @@ function mountCurrentBag(root) {
     else { addTap(item.key); refresh(); }
   });
 
+  // Minute display, refreshed every 15s and on returning to the app
+  // (battery: the old 1-second redraw of the whole card kept the phone busy).
+  // Locking the phone is fine — elapsed time comes from the saved start time.
   clearInterval(bagTicker);
-  bagTicker = setInterval(refresh, 1000);
+  bagTicker = setInterval(refreshTimer, 15_000);
+  document.addEventListener('visibilitychange', refreshTimer);
   refresh();
 }
 

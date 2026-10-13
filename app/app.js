@@ -99,11 +99,11 @@ function initPunchClock() {
   function tick() {
     const punch = getPunch();
     if (!punch) return;
+    if (document.hidden) return; // nothing to redraw while the phone is locked / app in background
     const ms = Date.now() - new Date(punch.start).getTime();
     const h  = Math.floor(ms / 3600000);
     const m  = Math.floor((ms % 3600000) / 60000);
-    const s  = Math.floor((ms % 60000) / 1000);
-    elapsed.textContent = `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    elapsed.textContent = `${h}:${String(m).padStart(2,'0')}`;
   }
 
   function updateDisplay() {
@@ -113,7 +113,8 @@ function initPunchClock() {
       btn.classList.add('active');
       timerEl.style.display = 'block';
       tick();
-      if (!ticker) ticker = setInterval(tick, 1000);
+      // Minutes only, refreshed every 20s (battery: a 1-second tick kept the phone from idling)
+      if (!ticker) ticker = setInterval(tick, 20_000);
     } else {
       btn.textContent = 'Start Shift';
       btn.classList.remove('active');
@@ -153,6 +154,7 @@ function initPunchClock() {
     updateDisplay();
   });
 
+  document.addEventListener('visibilitychange', tick);
   updateDisplay();
 }
 
