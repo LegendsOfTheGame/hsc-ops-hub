@@ -35,7 +35,12 @@ def queue_post(spec_path):
     posted = []
     for channels, text in ((long_channels, caption), (short_channels, short)):
         weather.BUFFER_CHANNELS = channels
-        posted += weather.send_to_buffer(text, image_url, immediate=False)
+        try:
+            posted += weather.send_to_buffer(text, image_url, immediate=False)
+        except RuntimeError as e:
+            weather.log.error("%s", e)
+    if not posted:
+        raise RuntimeError("Post was not queued on any channel")
     weather.log.info("Queued %s to %d channel(s)", spec_path, len(posted))
 
 
