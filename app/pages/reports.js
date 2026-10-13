@@ -2,6 +2,7 @@ import { select } from '../db.js';
 import { localDateStr, fmtDate } from '../utils.js';
 import { getRole } from '../auth.js';
 import { bagFactor, LITTER_ITEMS, countItems } from './field.js';
+import { reportCardHtml, mountReportCard } from './report-pdf.js';
 
 const LB_PER_KG = 2.20462;
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -10,6 +11,7 @@ export async function renderReports(root) {
   root.innerHTML = `
     <div class="page-title">Reports</div>
     <div class="page-subtitle">Waste and graffiti data for the BIA and the City of Hamilton</div>
+    ${reportCardHtml()}
     ${wasteCardHtml()}
     <div class="card">
       <div class="card-title">Export Options</div>
@@ -37,6 +39,7 @@ export async function renderReports(root) {
   `;
 
   mountWasteReport(root);
+  mountReportCard(root, loadWaste);
   root.querySelector('#export-csv').addEventListener('click', () => exportCsv(root, false));
   root.querySelector('#export-city').addEventListener('click', () => exportCsv(root, true));
 
