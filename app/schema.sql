@@ -298,7 +298,7 @@ create table if not exists street_survey (
   civic           integer not null,
   unit            text,                   -- single letter, null when none
   street          text not null,          -- 'Barton St E' or a cross street, Ferguson → Sherman
-  category        text,                   -- Business | Vacant storefront | Business + homes | Residential | Non-profit | Church | City-owned | Vacant lot / parking | Other
+  category        text,                   -- Business | Vacant storefront | Business + homes | Residential | Non-profit | Church | City-owned | Vacant lot / parking | Other | Outside BIA
   business_name   text,                   -- name on the sign
   contact_phone   text,                   -- phone posted at the property
   contact_email   text,                   -- e.g. property manager

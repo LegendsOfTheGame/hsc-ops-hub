@@ -29,6 +29,8 @@ const CATEGORIES = [
   { key: 'City-owned',           levy: false },
   { key: 'Vacant lot / parking', levy: false },
   { key: 'Other',                levy: false },
+  // East of Sherman or west of Ferguson: recorded for outreach, never in the levy count
+  { key: 'Outside BIA',          levy: false },
 ];
 const LEVY = new Set(CATEGORIES.filter(c => c.levy).map(c => c.key));
 
