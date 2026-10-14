@@ -638,7 +638,7 @@ function openBinModal(root) {
       <div class="form-group">
         <label>How Full</label>
         <div class="chip-group" id="bin-fill">
-          ${FILL_LEVELS.map(f => `<button class="chip${f === 'Full' ? ' selected' : ''}" data-value="${f}">${f}</button>`).join('')}
+          ${FILL_LEVELS.map(f => `<button class="chip" data-value="${f}">${f}</button>`).join('')}
         </div>
       </div>
       <div class="form-group">
@@ -673,10 +673,13 @@ function openBinModal(root) {
     autoGPS(box, '#bin-location', '#bin-gps', '#bin-gps-hint');
 
     box.querySelector('#bin-submit').addEventListener('click', async () => {
+      // No default: with Full pre-selected, a skipped choice was saved as Full
+      const fill = chipValue(box.querySelector('#bin-fill'));
+      if (!fill) { showToast('Select how full — Full or Overflowing'); return; }
+
       const submitBtn = box.querySelector('#bin-submit');
       submitBtn.disabled = true;
 
-      const fill = chipValue(box.querySelector('#bin-fill')) || 'Full';
       const container = chipValue(box.querySelector('#bin-type')) || CONTAINER_TYPES[0];
       const userNotes = box.querySelector('#bin-notes').value.trim();
       const today = localDateStr();
