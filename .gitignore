@@ -1,0 +1,34 @@
+# Client and personal photo stores — never belongs in this repo.
+# hsc-ops-hub emails the BIA on every push.
+iCloud/
+Instagram/
+
+# Build cache
+.wrangler/
+
+# Local work at the repo root: photo tools, galleries, CSVs, proposals.
+# Nothing at the root is tracked; only app/, .github/ and .claude/ are.
+/*.py
+/*.csv
+/*.txt
+/*.html
+/*.docx
+/*.pdf
+
+# Cloudflare Workers and other projects — deployed with wrangler or kept
+# in their own repos, never through this one.
+hsc-automation/
+hsc-automation-captions/
+hsc-automation-laundry/
+hsc-brandon/
+hsc-report-upload/
+hsc-website-v2/
+poster/
+proposal_temp/
+
+# Per-machine Claude Code settings
+.claude/settings.local.json
+
+# Retired Python weather pipeline (replaced by the weather-worker, July 2026).
+# Kept on disk only.
+scripts/
