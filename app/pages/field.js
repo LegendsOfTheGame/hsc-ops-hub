@@ -42,6 +42,23 @@ const CONTAINER_TYPES = ['City litter bin', 'Recycling bin', 'Business bin', 'Ot
 
 const LB_PER_KG = 2.20462;
 
+// ── Repeat-tap guard ─────────────────────────────────────────────────────────
+// A second tap on Log within 30 s wrote the same entry twice (supplies 13 Oct,
+// a bag 3 Jul), which double-counts weight, cost and stock. A bag can't be
+// filled in 30 s, so any second bag that soon is a repeat. Supplies and bins
+// only count as a repeat when the entry is identical. Graffiti is left alone:
+// two different tags 29 s apart is real (13 Oct).
+const REPEAT_MS = 30_000;
+const lastLogged = new Map();
+
+function claimLog(key) {
+  const t = lastLogged.get(key);
+  if (t && Date.now() - t < REPEAT_MS) return false;
+  lastLogged.set(key, Date.now());
+  return true;
+}
+const releaseLog = key => lastLogged.delete(key); // save failed: allow a retry
+
 // ── Current bag (timer + live tally), kept per-device in localStorage ────────
 
 const BAG_KEY  = 'hsc2_bag_current';
@@ -545,6 +562,8 @@ function openBagModal(root) {
       if (minutes) summary.push(`${minutes} min`);
       if (itemTotal) summary.push(LITTER_ITEMS.filter(i => counts[i.key]).map(i => `${i.label} ×${counts[i.key]}${i.brands ? ` (${i.brands.filter(x => brands[i.key]?.[x.name]).map(x => `${x.short} ${brands[i.key][x.name]}`).join(', ')})` : ''}`).join(', '));
 
+      if (!claimLog('bag_drop')) { showToast('A bag was logged under 30 seconds ago — not saved twice', 'error'); return; }
+
       const submitBtn = box.querySelector('#bag-submit');
       submitBtn.disabled = true;
 
@@ -554,6 +573,7 @@ function openBagModal(root) {
         submitBtn.textContent = 'Log Bag Drop';
         if (!photoUrl) {
           showToast('Photo upload failed — check signal and tap Log again', 'error');
+          releaseLog('bag_drop');
           submitBtn.disabled = false;
           return;
         }
@@ -577,7 +597,7 @@ function openBagModal(root) {
       if (error) {
         // Waste columns missing — keep the bag (details are in notes) and flag it
         const { error: err2 } = await insert('field_logs', { ...row, bag_weight_kg: undefined, bag_minutes: undefined, item_counts: undefined, image_url: undefined, notes: `${row.notes} · photo ${photoUrl}` });
-        if (err2) { showToast('Failed to save — check connection', 'error'); submitBtn.disabled = false; return; }
+        if (err2) { showToast('Failed to save — check connection', 'error'); releaseLog('bag_drop'); submitBtn.disabled = false; return; }
         showToast('Bag saved, but weight/time columns are missing — run the schema.sql migration', 'error');
       } else {
         showToast(`✓ Bag drop logged (${color}${weightRaw > 0 ? `, ${weightRaw} ${unit}` : ''})`);
@@ -669,10 +689,12 @@ function openBinModal(root) {
         container_type: container,
         notes: `${fill} ${container.toLowerCase()}` + (userNotes ? ` — ${userNotes}` : ''),
       };
+      const key = `bin_full|${row.location}|${row.notes}`;
+      if (!claimLog(key)) { showToast('This bin was logged under 30 seconds ago — not saved twice', 'error'); submitBtn.disabled = false; return; }
       let { error } = await insert('field_logs', row);
       if (error) {
         const { error: err2 } = await insert('field_logs', { ...row, fill_level: undefined, container_type: undefined });
-        if (err2) { showToast('Failed to save — check connection', 'error'); submitBtn.disabled = false; return; }
+        if (err2) { showToast('Failed to save — check connection', 'error'); releaseLog(key); submitBtn.disabled = false; return; }
         showToast('Bin saved, but fill/container columns are missing — run the schema.sql migration', 'error');
       } else {
         showToast(`✓ ${fill} bin logged`);
@@ -960,6 +982,7 @@ async function openSupplyModal(root) {
         notes:     notes ? `${itemName} ×${qty} — ${notes}` : `${itemName} ×${qty}`,
         supply_cost: totalCost,
       };
+      if (!claimLog(`supply_use|${itemId}|${logRow.notes}`)) { showToast('This supply was logged under 30 seconds ago — not saved twice', 'error'); return; }
       let { error: logErr } = await insert('field_logs', logRow);
       if (logErr) await insert('field_logs', { ...logRow, supply_cost: undefined });
 
