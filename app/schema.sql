@@ -285,3 +285,42 @@ alter table field_logs add column if not exists item_counts    jsonb;
 alter table field_logs add column if not exists fill_level     text;
 alter table field_logs add column if not exists container_type text;
 alter table field_logs add column if not exists image_url      text;  -- bag photo (required) / graffiti photo
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 2026-10 — Street Survey page (pages/survey.js). One row per address
+-- per survey round. Safe to re-run.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create table if not exists street_survey (
+  id              bigserial primary key,
+  round           text not null,          -- e.g. '2026-10'
+  address_key     text not null,          -- '340 Barton St E', '200B Sanford Ave N'
+  civic           integer not null,
+  unit            text,                   -- single letter, null when none
+  street          text not null,          -- 'Barton St E' or a cross street, Ferguson → Sherman
+  category        text,                   -- Business | Vacant storefront | Business + homes | Residential | Non-profit | Church | City-owned | Vacant lot / parking | Other
+  business_name   text,                   -- name on the sign
+  contact_phone   text,                   -- phone posted at the property
+  contact_email   text,                   -- e.g. property manager
+  notes           text,
+  lat             double precision,       -- GPS at the door when saved (for OSM updates)
+  lng             double precision,
+  gps_acc         integer,                -- metres; ≤15 counts as a good map point
+  logged_at       timestamptz,
+  created_at      timestamptz default now(),
+  updated_at      timestamptz default now(),
+  unique (round, address_key)
+);
+
+alter table street_survey add column if not exists business_name text;
+alter table street_survey add column if not exists contact_phone text;
+alter table street_survey add column if not exists contact_email text;
+alter table street_survey add column if not exists notes         text;
+alter table street_survey add column if not exists lat           double precision;
+alter table street_survey add column if not exists lng           double precision;
+
+alter table street_survey enable row level security;
+do $$ begin
+  create policy "Authenticated users only" on street_survey
+    for all to authenticated using (true) with check (true);
+exception when duplicate_object then null; end $$;

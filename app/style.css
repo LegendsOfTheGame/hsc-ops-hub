@@ -933,3 +933,26 @@ body.printing { overflow: hidden; }
   .pr-table tr, .pr-tile { break-inside: avoid; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ── Street survey ── */
+.sv-form { display: flex; flex-direction: column; gap: 10px; }
+.sv-addr { display: flex; gap: 8px; }
+.sv-form input, .sv-form select, .sv-form textarea {
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text-primary); padding: 12px; font-size: 18px; min-width: 0; font-family: inherit;
+}
+.sv-form input:focus, .sv-form select:focus, .sv-form textarea:focus { outline: none; border-color: var(--accent); }
+#sv-num  { flex: 1 1 auto; font-weight: 700; font-size: 22px; }
+#sv-unit { flex: 0 0 72px; text-align: center; font-size: 22px; }
+.sv-save { padding: 14px; font-size: 18px; }
+.sv-gps { font-size: 13px; color: var(--text-muted); }
+.sv-gps-good { color: var(--success); }
+.sv-gps-weak { color: var(--warning); }
+.sv-gps-bad  { color: var(--danger); }
+.sv-row-main { flex: 1; cursor: pointer; }
+.sv-hint { font-size: 13px; color: var(--text-secondary); min-height: 1em; }
+.sv-sync { color: var(--warning); font-size: 13px; margin-bottom: 12px; }
+.sv-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.sv-row:last-child { border-bottom: none; }
+.sv-meta { font-size: 12px; }
+.sv-muted { color: var(--text-muted); }

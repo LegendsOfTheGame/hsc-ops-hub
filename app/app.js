@@ -15,6 +15,7 @@ import { renderReports }   from './pages/reports.js';
 import { renderEvents }    from './pages/events.js';
 import { renderSettings }  from './pages/settings.js';
 import { renderBylaw }     from './pages/bylaw.js';
+import { renderSurvey }    from './pages/survey.js';
 
 const PAGES = {
   home:      renderHome,
@@ -31,12 +32,13 @@ const PAGES = {
   events:    renderEvents,
   settings:  renderSettings,
   bylaw:     renderBylaw,
+  survey:    renderSurvey,
 };
 
 // ── Roles ─────────────────────────────────────────────────────────────────────
 
 const ROLE_PAGES = {
-  field: ['home', 'field', 'graffiti', 'inventory', 'bylaw'],
+  field: ['home', 'field', 'graffiti', 'inventory', 'bylaw', 'survey'],
   bia:   ['reports', 'bylaw'],
 };
 
