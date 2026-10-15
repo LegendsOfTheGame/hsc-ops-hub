@@ -826,6 +826,147 @@ function placeLine(o) {
   return parts.join(' · ');
 }
 
+// ── Send to queue ─────────────────────────────────────────────────────────────
+// hsc-post-upload POST /queue posts the saved image to Buffer. The worker
+// checks the same limits again before it sends anything.
+
+// tags: HSC hashtag rule — at most 5 on Instagram and Facebook, 1 on Threads
+const QUEUE_CHANNELS = {
+  instagram: { name: 'Instagram', limit: 2200, tags: 5 },
+  facebook:  { name: 'Facebook',  limit: 63206, tags: 5 },
+  threads:   { name: 'Threads',   limit: 500, tags: 1 },
+  twitter:   { name: 'X',         limit: 280, tags: Infinity },
+  bluesky:   { name: 'Bluesky',   limit: 300, tags: Infinity },
+};
+
+// Same as the worker: Threads keeps its first hashtag only
+const HASHTAG_RE = /(^|\s)#[\p{L}_][\p{L}\p{N}_]*/gu;
+const countHashtags = text => (text.match(HASHTAG_RE) || []).length;
+function limitHashtags(text, max) {
+  if (countHashtags(text) <= max) return text;
+  let seen = 0;
+  return text.replace(HASHTAG_RE, (m, lead) => (++seen <= max ? m : lead))
+    .replace(/[ \t]+$/gm, '').replace(/ {2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// Same count as the worker: X counts most non-Latin characters (emoji) as 2
+function textLength(text, channel) {
+  let n = 0;
+  for (const ch of text) {
+    const cp = ch.codePointAt(0);
+    const light = cp <= 0x10FF || (cp >= 0x2000 && cp <= 0x200D) || (cp >= 0x2010 && cp <= 0x201F) || (cp >= 0x2032 && cp <= 0x2037);
+    n += channel === 'twitter' && !light ? 2 : 1;
+  }
+  return n;
+}
+
+function queueForm() {
+  return `
+    <div class="bp-queue">
+      <div><strong>Send to queue</strong></div>
+      <div class="form-group"><label>Note for the AI (optional)</label><input data-q="hint" maxlength="300" placeholder="e.g. 3rd time this wall was tagged this month"></div>
+      <div class="btn-group"><button class="btn btn-secondary btn-sm" data-q="draft" type="button">Draft with AI</button></div>
+      <div data-q="draft-out"></div>
+      <div class="form-group"><label>Caption (Instagram, Facebook, Threads)</label><textarea data-q="caption" rows="6"></textarea></div>
+      <div class="form-group"><label>Short caption (X, Bluesky; Threads too when the caption is over 500)</label><textarea data-q="short" rows="3" placeholder="Blank = same as the caption"></textarea></div>
+      <div class="bp-meta" data-q="count"></div>
+      <div class="form-group">
+        ${Object.entries(QUEUE_CHANNELS).map(([k, c]) => `<label><input type="checkbox" data-ch="${k}" checked> ${c.name}</label>`).join(' ')}
+      </div>
+      <div class="form-group"><label>Post at (blank = next queue slot)</label><input type="datetime-local" data-q="due"></div>
+      <div class="btn-group"><button class="btn btn-primary btn-sm" data-q="send" type="button">Send to queue</button></div>
+      <div data-q="out"></div>
+    </div>`;
+}
+
+function wireQueue(el, r) {
+  const q = name => el.querySelector(`[data-q="${name}"]`);
+  const picked = () => [...el.querySelectorAll('[data-ch]:checked')].map(b => b.dataset.ch);
+  function textFor(ch, caption, short) {
+    if (ch === 'twitter' || ch === 'bluesky') return short;
+    if (ch === 'threads') return limitHashtags(textLength(limitHashtags(caption, 1), ch) > 500 ? short : caption, 1);
+    return caption;
+  }
+
+  // Characters and hashtags per picked channel; returns the channels over a limit
+  function count() {
+    const caption = q('caption').value.trim(), short = q('short').value.trim() || caption;
+    const over = [];
+    q('count').innerHTML = picked().map(ch => {
+      const c = QUEUE_CHANNELS[ch], text = textFor(ch, caption, short);
+      const n = textLength(text, ch), tags = countHashtags(text);
+      const bad = n > c.limit || tags > c.tags;
+      if (bad) over.push(ch);
+      const tagNote = c.tags === Infinity ? '' : `, ${tags}/${c.tags} #`;
+      return `<span class="${bad ? 'bp-over' : ''}">${c.name} ${n}/${c.limit}${tagNote}</span>`;
+    }).join(' · ') + (picked().includes('threads') ? '<br>Threads keeps the first hashtag only.' : '');
+    return over;
+  }
+  el.querySelectorAll('[data-q="caption"], [data-q="short"], [data-ch]').forEach(i => i.addEventListener('input', count));
+  count();
+
+  // Gemini looks at the saved image and writes both captions; always edit before sending
+  q('draft').addEventListener('click', async () => {
+    const out = q('draft-out'), btn = q('draft');
+    if ((q('caption').value.trim() || q('short').value.trim()) && !confirm('Replace the captions you wrote with an AI draft?')) return;
+    btn.disabled = true;
+    out.innerHTML = '<div class="bp-hint">Drafting…</div>';
+    try {
+      const res = await fetch(`${UPLOAD_WORKER_URL}/draft`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image_url: r.image_url, headline: r.headline, subline: r.subline, caption_title: r.caption_title,
+          caption_line: r.caption_line, body: r.body, label: r.label, hint: q('hint').value,
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || `draft failed (${res.status})`);
+      q('caption').value = j.caption;
+      q('short').value = j.caption_short;
+      count();
+      out.innerHTML = '<div class="bp-hint">AI draft. Check every fact before you send it.</div>';
+    } catch (err) {
+      out.innerHTML = `<div class="bp-status bad">${esc(err.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  q('send').addEventListener('click', async () => {
+    const out = q('out');
+    const channels = picked();
+    const caption = q('caption').value.trim();
+    if (!caption) { out.innerHTML = '<div class="bp-status bad">Write a caption first.</div>'; return; }
+    if (!channels.length) { out.innerHTML = '<div class="bp-status bad">Pick at least one channel.</div>'; return; }
+    if (count().length) { out.innerHTML = '<div class="bp-status bad">The caption is too long, or has too many hashtags, for a channel marked in red.</div>'; return; }
+    const due = q('due').value ? new Date(q('due').value).toISOString() : null;
+    const names = channels.map(ch => QUEUE_CHANNELS[ch].name).join(', ');
+    const when = due ? new Date(due).toLocaleString('en-CA', { timeZone: 'America/Toronto', dateStyle: 'medium', timeStyle: 'short' }) : 'the next queue slot';
+    if (!confirm(`Send this post to ${names} for ${when}?`)) return;
+
+    const btn = q('send');
+    btn.disabled = true;
+    out.innerHTML = '<div class="bp-hint">Sending…</div>';
+    try {
+      const res = await fetch(`${UPLOAD_WORKER_URL}/queue`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_url: r.image_url, caption, caption_short: q('short').value.trim(), channels, due_at: due }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!j.results) throw new Error(j.error || `queue failed (${res.status})`);
+      out.innerHTML = j.results.map(x => x.ok
+        ? `<div class="bp-status ok">${esc(QUEUE_CHANNELS[x.channel].name)}: queued ✓</div>`
+        : `<div class="bp-status bad">${esc(QUEUE_CHANNELS[x.channel].name)}: ${esc(x.error)}</div>`).join('');
+    } catch (err) {
+      out.innerHTML = `<div class="bp-status bad">Not sent: ${esc(err.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
 async function renderSaved(el) {
   el.innerHTML = '<div class="bp-hint">Loading…</div>';
   const { data, error } = await select('branded_posts', { order: 'created_at', ascending: false, limit: 120 });
@@ -855,6 +996,7 @@ function showDetail(el, r) {
             <button class="btn btn-secondary btn-sm" data-copy="${esc(r.short_url || r.image_url)}" type="button">Copy post link</button>
           </div>
           <input class="bp-link" readonly value="${esc(r.short_url || r.image_url)}">
+          ${queueForm()}
           ${(r.originals || []).map((o, i) => `
             <div class="bp-orig">
               <div><strong>${esc(o.slot === 'main' ? 'Original photo' : `${o.slot[0].toUpperCase()}${o.slot.slice(1)} original`)}</strong></div>
@@ -878,6 +1020,7 @@ function showDetail(el, r) {
   };
   el.querySelectorAll('.bp-link').forEach(inp => inp.addEventListener('focus', () => inp.select()));
   el.querySelectorAll('[data-copy]').forEach(btn => btn.addEventListener('click', () => copy(btn.dataset.copy, btn)));
+  wireQueue(el, r);
 
   // Share link: anyone can open it for 7 days, no sign-in (for City / client reports)
   el.querySelectorAll('[data-share]').forEach(btn => btn.addEventListener('click', async () => {

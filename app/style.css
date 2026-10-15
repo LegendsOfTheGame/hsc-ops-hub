@@ -1000,6 +1000,10 @@ body.printing { overflow: hidden; }
 .bp-detail-main > img { width: 100%; border-radius: 6px; border: 1px solid var(--border); }
 .bp-orig { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 12px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .bp-orig a { color: var(--accent); }
+.bp-queue { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 12px; }
+.bp-queue textarea { width: 100%; }
+.bp-queue label:has(input[type="checkbox"]) { display: inline-flex; gap: 4px; align-items: center; margin-right: 10px; }
+.bp-over { color: var(--danger); font-weight: 700; }
 .bp-orig-view img { max-width: 100%; max-height: 60vh; border-radius: 6px; display: block; margin-bottom: 6px; }
 @media (max-width: 700px) { .bp-detail-main { grid-template-columns: 1fr; } }
 .bp-link { width: 100%; font-size: 11px; padding: 6px 8px; background: var(--bg-input); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 4px; margin-top: 6px; }
