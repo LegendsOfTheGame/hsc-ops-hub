@@ -348,3 +348,40 @@ do $$ begin
   create policy "Authenticated users only" on street_survey
     for all to authenticated using (true) with check (true);
 exception when duplicate_object then null; end $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Branded Post library ("live on location" shots). Safe to re-run.
+-- image_url: finished branded JPG in the public R2 bucket (posts/).
+-- originals: raw phone photos in the PRIVATE hsc-originals bucket, EXIF intact,
+--   read back only through hsc-post-upload GET /original/<key>. One object per
+--   slot: { slot, key, size, type, width, height,
+--           exif_lat, exif_lng, exif_taken,          -- from the photo itself
+--           device_lat, device_lng, device_acc, device_at }  -- phone GPS when the
+--                                                    -- photo had none (in-page camera)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create table if not exists branded_posts (
+  id              bigserial primary key,
+  layout          text not null,          -- beforeafter | single | text | full
+  tag             text,                   -- header tag, top right
+  headline        text,
+  subline         text,
+  caption_title   text,
+  caption_line    text,
+  body            text,                   -- text card
+  label           text,                   -- full photo + label
+  image_url       text not null,
+  image_key       text not null,
+  short_url       text,                   -- Linkly link to image_url, made on upload
+  originals       jsonb not null default '[]'::jsonb,
+  created_by      uuid default auth.uid(),
+  created_at      timestamptz default now()
+);
+
+alter table branded_posts add column if not exists short_url text;
+
+alter table branded_posts enable row level security;
+do $$ begin
+  create policy "Authenticated users only" on branded_posts
+    for all to authenticated using (true) with check (true);
+exception when duplicate_object then null; end $$;

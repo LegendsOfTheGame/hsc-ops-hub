@@ -16,6 +16,7 @@ import { renderEvents }    from './pages/events.js';
 import { renderSettings }  from './pages/settings.js';
 import { renderBylaw }     from './pages/bylaw.js';
 import { renderSurvey }    from './pages/survey.js';
+import { renderBranded }   from './pages/branded.js';
 
 const PAGES = {
   home:      renderHome,
@@ -33,6 +34,7 @@ const PAGES = {
   settings:  renderSettings,
   bylaw:     renderBylaw,
   survey:    renderSurvey,
+  branded:   renderBranded,
 };
 
 // ── Roles ─────────────────────────────────────────────────────────────────────
