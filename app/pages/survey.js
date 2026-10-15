@@ -37,10 +37,17 @@ const LEVY = new Set(CATEGORIES.filter(c => c.levy).map(c => c.key));
 const FIELDS = ['category', 'business_name', 'contact_phone', 'contact_email', 'notes'];
 const GOOD_FIX_M = 15; // a fix this tight is good enough to place a point on OSM
 
+// Map points: street furniture with no address, saved to street_points.
+// Business bins are only the two HSC has access to.
+const BUSINESS_BINS = ['541 Barton St E', '673 Barton St E (West Side Beef)'];
+const REPEAT_MS = 10_000; // two City bins can't be 10 s apart on foot
+
 const QUEUE_KEY  = 'hsc2_survey_queue';
 const STREET_KEY = 'hsc2_survey_street';
 
 let entries = new Map(); // address_key → row (this round)
+let points = [];         // street_points rows (this round), newest first
+let lastPoint = { kind: null, at: 0 };
 let fix = null;          // latest GPS fix { lat, lng, acc, at }
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -76,12 +83,36 @@ export async function renderSurvey(root) {
       <button class="btn btn-primary sv-save" id="sv-save">Save</button>
     </div>
 
+    <div class="card sv-form">
+      <div class="card-title" style="margin-bottom:0">Map a point — stand right at it</div>
+      <div class="sv-pt-btns">
+        <button class="sv-pt" data-kind="City litter bin">🗑️<span>City bin</span><small>saves on tap</small></button>
+        <button class="sv-pt" data-kind="Business bin">🚮<span>Business bin</span></button>
+        <button class="sv-pt" data-kind="HSR stop">🚏<span>HSR stop</span></button>
+      </div>
+      <div id="sv-pt-business" hidden>
+        <select id="sv-pt-biz">${BUSINESS_BINS.map(b => `<option>${esc(b)}</option>`).join('')}</select>
+      </div>
+      <div id="sv-pt-hsr" hidden class="sv-pt-hsr">
+        <input type="text" id="sv-pt-stop" inputmode="numeric" pattern="[0-9]*" placeholder="Stop number (on the sign)" autocomplete="off">
+        <label><input type="checkbox" id="sv-pt-shelter"> Shelter</label>
+        <label><input type="checkbox" id="sv-pt-bench"> Bench</label>
+      </div>
+      <input type="text" id="sv-pt-note" placeholder="Note (optional, e.g. lid broken)" autocomplete="off">
+      <button class="btn btn-primary sv-save" id="sv-pt-save" hidden></button>
+    </div>
+
     <div id="sv-sync" class="sv-sync" hidden></div>
     <div class="session-summary" id="sv-stats"></div>
 
     <div class="card">
       <div class="card-title">Recorded</div>
       <div id="sv-recent"><div class="loading">Loading…</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" id="sv-points-title">Mapped points</div>
+      <div id="sv-points"><div class="loading">Loading…</div></div>
     </div>
   `;
 
@@ -96,8 +127,10 @@ export async function renderSurvey(root) {
     onAddressChange(root);
   });
   root.querySelector('#sv-save').addEventListener('click', () => save(root));
+  wirePoints(root);
 
   startGPS(root);
+  loadPoints(root);
 
   const { data, error } = await select('street_survey', { filter: { round: ROUND }, order: 'logged_at', ascending: false });
   if (error) {
@@ -106,7 +139,7 @@ export async function renderSurvey(root) {
   }
   entries = new Map();
   for (const r of data || []) entries.set(r.address_key, r);
-  for (const q of loadQueue()) if (q.op === 'insert') entries.set(q.row.address_key, { ...q.row, pending: true });
+  for (const q of loadQueue()) if (q.op === 'insert' && !q.table) entries.set(q.row.address_key, { ...q.row, pending: true });
 
   renderStats(root);
   renderRecent(root);
@@ -311,7 +344,12 @@ async function flushQueue(root) {
   flushing = true;
   const left = [];
   for (const item of q) {
-    if (item.op === 'insert') {
+    if (item.table === 'street_points') {
+      const { data, error } = await insert('street_points', item.row);
+      if (error || !data?.id) { left.push(item); continue; }
+      const i = points.findIndex(p => p.pending && p.logged_at === item.row.logged_at);
+      if (i >= 0) points[i] = data;
+    } else if (item.op === 'insert') {
       const { data, error } = await insert('street_survey', item.row);
       if (error || !data?.id) { left.push(item); continue; }
       entries.set(item.row.address_key, data);
@@ -325,5 +363,125 @@ async function flushQueue(root) {
   saveQueue(left);
   flushing = false;
   if (bar) { bar.hidden = !left.length; bar.textContent = `${left.length} record${left.length === 1 ? '' : 's'} waiting to sync`; }
-  if (left.length < q.length) { renderStats(root); renderRecent(root); }
+  if (left.length < q.length) { renderStats(root); renderRecent(root); renderPoints(root); }
+}
+
+// ── Map points (bins, HSR stops) ─────────────────────────────────────────────
+
+async function loadPoints(root) {
+  const { data, error } = await select('street_points', { filter: { round: ROUND }, order: 'logged_at', ascending: false });
+  const wrap = root.querySelector('#sv-points');
+  if (error) {
+    if (wrap) wrap.innerHTML = `<div class="empty-state">Could not load map points. Run the street_points section of schema.sql in Supabase.</div>`;
+    return;
+  }
+  points = data || [];
+  for (const q of loadQueue()) if (q.table === 'street_points') points.unshift({ ...q.row, pending: true });
+  renderPoints(root);
+}
+
+let pointKind = null; // panel open for 'Business bin' | 'HSR stop'
+
+function wirePoints(root) {
+  const bizPanel = root.querySelector('#sv-pt-business');
+  const hsrPanel = root.querySelector('#sv-pt-hsr');
+  const saveBtn  = root.querySelector('#sv-pt-save');
+
+  root.querySelectorAll('.sv-pt').forEach(b => b.addEventListener('click', () => {
+    const kind = b.dataset.kind;
+    if (kind === 'City litter bin') { savePoint(root, { kind }); return; }
+    pointKind = pointKind === kind ? null : kind; // second tap closes the panel
+    root.querySelectorAll('.sv-pt').forEach(x => x.classList.toggle('selected', x.dataset.kind === pointKind));
+    bizPanel.hidden = pointKind !== 'Business bin';
+    hsrPanel.hidden = pointKind !== 'HSR stop';
+    saveBtn.hidden = !pointKind;
+    saveBtn.textContent = pointKind ? `Save ${pointKind}` : '';
+  }));
+
+  saveBtn.addEventListener('click', () => {
+    if (pointKind === 'Business bin') {
+      savePoint(root, { kind: pointKind, business: root.querySelector('#sv-pt-biz').value });
+    } else if (pointKind === 'HSR stop') {
+      savePoint(root, {
+        kind: pointKind,
+        stop_ref: root.querySelector('#sv-pt-stop').value.replace(/\D/g, '') || null,
+        shelter: root.querySelector('#sv-pt-shelter').checked,
+        bench:   root.querySelector('#sv-pt-bench').checked,
+      });
+    }
+  });
+}
+
+async function savePoint(root, details) {
+  // A point without GPS can't go on the map
+  const fresh = fix && Date.now() - fix.at < 30_000 ? fix : null;
+  if (!fresh) { showToast('No GPS fix yet — a map point needs one', 'error'); return; }
+  if (fresh.acc > GOOD_FIX_M && !confirm(`GPS is weak (±${fresh.acc} m). Save anyway?`)) return;
+  if (details.kind === lastPoint.kind && Date.now() - lastPoint.at < REPEAT_MS) {
+    showToast(`${details.kind} saved seconds ago — not saved twice`, 'error');
+    return;
+  }
+  lastPoint = { kind: details.kind, at: Date.now() };
+
+  const row = {
+    round: ROUND,
+    kind: details.kind,
+    business: details.business ?? null,
+    stop_ref: details.stop_ref ?? null,
+    shelter: details.shelter ?? null,
+    bench: details.bench ?? null,
+    notes: root.querySelector('#sv-pt-note').value.trim() || null,
+    lat: fresh.lat,
+    lng: fresh.lng,
+    gps_acc: fresh.acc,
+    logged_at: new Date().toISOString(),
+  };
+  const local = { ...row, pending: true };
+  points.unshift(local);
+  const { data, error } = await insert('street_points', row);
+  if (error || !data?.id) { queuePush({ table: 'street_points', op: 'insert', row }); offlineToast(); }
+  else points[points.indexOf(local)] = data;
+
+  showToast(`✓ ${details.kind} mapped (±${fresh.acc} m)`);
+  root.querySelector('#sv-pt-note').value = '';
+  root.querySelector('#sv-pt-stop').value = '';
+  root.querySelector('#sv-pt-shelter').checked = false;
+  root.querySelector('#sv-pt-bench').checked = false;
+  renderPoints(root);
+}
+
+function renderPoints(root) {
+  const wrap = root.querySelector('#sv-points');
+  if (!wrap) return;
+  const n = k => points.filter(p => p.kind === k).length;
+  root.querySelector('#sv-points-title').textContent =
+    `Mapped points · ${n('City litter bin')} City bins · ${n('Business bin')} business bins · ${n('HSR stop')} HSR stops`;
+  if (!points.length) { wrap.innerHTML = `<div class="sv-muted">Nothing mapped yet.</div>`; return; }
+  wrap.innerHTML = points.map((p, i) => {
+    const extra = p.kind === 'Business bin' ? esc(p.business)
+      : p.kind === 'HSR stop' ? [p.stop_ref ? `stop ${esc(p.stop_ref)}` : 'no stop number', p.shelter ? 'shelter' : null, p.bench ? 'bench' : null].filter(Boolean).join(' · ')
+      : '';
+    return `
+    <div class="sv-row">
+      <div class="sv-row-main">
+        <strong>${esc(p.kind)}</strong>${extra ? ` <span class="sv-meta">${extra}</span>` : ''}
+        ${p.notes ? `<div class="sv-meta sv-muted">${esc(p.notes)}</div>` : ''}
+        <div class="sv-muted sv-meta">${fmtDateTime(p.logged_at)} · ±${p.gps_acc} m${p.pending ? ' · waiting to sync' : ''}</div>
+      </div>
+      <button class="btn btn-sm btn-secondary" data-pt="${i}" aria-label="Delete this point">✕</button>
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('button[data-pt]').forEach(b => b.addEventListener('click', () => deletePoint(root, points[Number(b.dataset.pt)])));
+}
+
+async function deletePoint(root, p) {
+  if (!p || !confirm(`Delete this ${p.kind}?`)) return;
+  if (p.id) {
+    const { error } = await remove('street_points', { id: p.id });
+    if (error) { showToast('Delete failed — check connection', 'error'); return; }
+  } else {
+    saveQueue(loadQueue().filter(x => !(x.table === 'street_points' && x.row.logged_at === p.logged_at)));
+  }
+  points = points.filter(x => x !== p);
+  renderPoints(root);
 }

@@ -956,3 +956,16 @@ body.printing { overflow: hidden; }
 .sv-row:last-child { border-bottom: none; }
 .sv-meta { font-size: 12px; }
 .sv-muted { color: var(--text-muted); }
+.sv-pt-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.sv-pt {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text-primary); font-size: 26px; padding: 12px 4px; cursor: pointer;
+}
+.sv-pt span { font-size: 14px; font-weight: 600; }
+.sv-pt small { font-size: 11px; color: var(--text-muted); }
+.sv-pt.selected { border-color: var(--accent); background: rgba(230,168,23,0.12); }
+.sv-pt:active { opacity: 0.8; }
+.sv-pt-hsr { display: flex; flex-direction: column; gap: 8px; }
+.sv-pt-hsr label { display: flex; align-items: center; gap: 8px; font-size: 16px; color: var(--text-primary); }
+.sv-pt-hsr input[type=checkbox] { width: 22px; height: 22px; padding: 0; flex: none; accent-color: var(--accent); }

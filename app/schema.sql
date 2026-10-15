@@ -319,6 +319,30 @@ alter table street_survey add column if not exists notes         text;
 alter table street_survey add column if not exists lat           double precision;
 alter table street_survey add column if not exists lng           double precision;
 
+-- Map points with no address (Street Survey page, "Map a point"): bins and
+-- HSR stops, for the HSC map and OpenStreetMap updates.
+create table if not exists street_points (
+  id              bigserial primary key,
+  round           text not null,          -- e.g. '2026-10'
+  kind            text not null,          -- City litter bin | Business bin | HSR stop
+  business        text,                   -- Business bin: whose bin
+  stop_ref        text,                   -- HSR stop: number on the stop sign
+  shelter         boolean,                -- HSR stop
+  bench           boolean,                -- HSR stop
+  notes           text,
+  lat             double precision not null,
+  lng             double precision not null,
+  gps_acc         integer,
+  logged_at       timestamptz,
+  created_at      timestamptz default now()
+);
+
+alter table street_points enable row level security;
+do $$ begin
+  create policy "Authenticated users only" on street_points
+    for all to authenticated using (true) with check (true);
+exception when duplicate_object then null; end $$;
+
 alter table street_survey enable row level security;
 do $$ begin
   create policy "Authenticated users only" on street_survey
