@@ -75,8 +75,10 @@ export function mountReportCard(root, loadWaste) {
     btn.disabled = true;
     btn.textContent = 'Loading…';
     try {
-      const [{ bags, bins }, { data: shifts }] = await Promise.all([loadWaste(), select('shifts')]);
-      openReport(mode, date, bags, bins, shifts || []);
+      const [{ bags, bins }, { data: shifts }, { data: supplies }, { data: inv }] = await Promise.all([
+        loadWaste(), select('shifts'), select('field_logs', { filter: { type: 'supply_use' } }), select('inventory_items'),
+      ]);
+      openReport(mode, date, bags, bins, shifts || [], supplies || [], inv || []);
     } finally {
       btn.disabled = false;
       btn.textContent = 'Open Report';
@@ -108,18 +110,36 @@ function summarize(bags) {
   };
 }
 
-function buildReport(mode, date, allBags, allBins, allShifts) {
+// Supply use is saved as notes "Item ×qty — optional note". Amounts only:
+// costs are deliberately left out (some supplies are donated by the BIA or the public).
+function summarizeSupplies(rows, inv) {
+  const unitOf = name => inv.find(i => i.name === name)?.unit || '';
+  const byItem = new Map();
+  for (const r of rows) {
+    const m = String(r.notes || '').match(/^(.*?) ×([\d.]+)/);
+    if (!m) continue;
+    const e = byItem.get(m[1]) || { name: m[1], qty: 0, uses: 0, unit: unitOf(m[1]) };
+    e.qty += parseFloat(m[2]) || 0;
+    e.uses++;
+    byItem.set(m[1], e);
+  }
+  return [...byItem.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+const fmtQty = e => `${+e.qty.toFixed(2)}${e.unit ? ' ' + e.unit : ''}`;
+
+function buildReport(mode, date, allBags, allBins, allShifts, allSupplies = [], inv = []) {
   const { from, to } = mode === 'week' ? weekOf(date) : { from: date, to: date };
   const inRange = r => { const d = r.date || r.logged_at?.slice(0, 10) || ''; return d >= from && d <= to; };
   const bags   = allBags.filter(inRange).sort((a, b) => (a.logged_at || '').localeCompare(b.logged_at || ''));
   const bins   = allBins.filter(inRange).sort((a, b) => (a.logged_at || '').localeCompare(b.logged_at || ''));
   const shifts = allShifts.filter(inRange);
+  const supplies = summarizeSupplies(allSupplies.filter(inRange), inv);
   const s = summarize(bags);
   const shiftHours = shifts.reduce((t, r) => t + (parseFloat(r.hours) || 0), 0);
 
   const title    = mode === 'week' ? 'Weekly Waste Report' : 'Daily Waste Report';
   const subtitle = mode === 'week' ? `Week of ${longDate(from)} – ${longDate(to)}` : longDate(from);
-  const ctx = { mode, from, to, title, subtitle, bags, bins, shifts, shiftHours, s };
+  const ctx = { mode, from, to, title, subtitle, bags, bins, shifts, shiftHours, s, supplies };
 
   let html = `
     <header class="pr-head">
@@ -131,7 +151,7 @@ function buildReport(mode, date, allBags, allBins, allShifts) {
       <div class="pr-gen">Generated ${new Date().toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' })}</div>
     </header>`;
 
-  if (!bags.length && !bins.length) {
+  if (!bags.length && !bins.length && !supplies.length) {
     return { html: html + `<p class="pr-empty">No bags or full bins were logged ${mode === 'week' ? 'this week' : 'on this day'}.</p>`, from, to, ctx };
   }
 
@@ -195,6 +215,16 @@ function buildReport(mode, date, allBags, allBins, allShifts) {
     </section>`;
   }
 
+  // Supplies used (amounts only, no costs)
+  if (supplies.length) {
+    html += `<section><h2>Supplies used</h2>
+      <div class="pr-scroll"><table class="pr-table">
+        <thead><tr><th>Item</th><th class="r">Amount used</th><th class="r">Times used</th></tr></thead>
+        <tbody>${supplies.map(e => `<tr><td>${esc(e.name)}</td><td class="r">${esc(fmtQty(e))}</td><td class="r">${e.uses}</td></tr>`).join('')}</tbody>
+      </table></div>
+    </section>`;
+  }
+
   // Full bins
   if (bins.length) {
     html += `<section><h2>Full bins</h2>
@@ -228,8 +258,8 @@ function buildReport(mode, date, allBags, allBins, allShifts) {
   return { html, from, to, ctx };
 }
 
-function openReport(mode, date, bags, bins, shifts) {
-  const { html, from, to, ctx } = buildReport(mode, date, bags, bins, shifts);
+function openReport(mode, date, bags, bins, shifts, supplies, inv) {
+  const { html, from, to, ctx } = buildReport(mode, date, bags, bins, shifts, supplies, inv);
   document.getElementById('print-report')?.remove();
 
   const wrap = document.createElement('div');
@@ -314,7 +344,7 @@ const dayShort = r => DAY_NAMES[parseLocal(r.date || r.logged_at.slice(0, 10)).g
 
 async function buildPdf(ctx) {
   const { jsPDF, autoTable } = await loadPdfLibs();
-  const { mode, from, to, title, subtitle, bags, bins, shifts, shiftHours, s } = ctx;
+  const { mode, from, to, title, subtitle, bags, bins, shifts, shiftHours, s, supplies } = ctx;
 
   const doc = new jsPDF({ unit: 'pt', format: 'letter' });
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 40;
@@ -358,7 +388,7 @@ async function buildPdf(ctx) {
   doc.setDrawColor(...GOLD).setLineWidth(2).line(M, y, W - M, y);
   y += 14;
 
-  if (!bags.length && !bins.length) {
+  if (!bags.length && !bins.length && !supplies.length) {
     doc.setFontSize(11).setTextColor(...GREY).text(`No bags or full bins were logged ${mode === 'week' ? 'this week' : 'on this day'}.`, M, y + 10);
     return doc.output('blob');
   }
@@ -416,6 +446,13 @@ async function buildPdf(ctx) {
       s.items.filter(i => i.total).map(i => [i.label, i.total, pdfText(i.byBrand.filter(b => b.total).map(b => `${b.name} ${b.total}`).join(' · ') || i.hint || '')]),
       { columnStyles: { 1: right } });
     note(`Counted by hand while filling ${s.tallied} of ${s.count} bags.`);
+  }
+
+  // Supplies used (amounts only, no costs)
+  if (supplies.length) {
+    heading('Supplies used');
+    table(['Item', 'Amount used', 'Times used'], supplies.map(e => [pdfText(e.name), pdfText(fmtQty(e)), e.uses]),
+      { columnStyles: { 1: right, 2: right } });
   }
 
   // Full bins (GPS cells link to Google Maps)
