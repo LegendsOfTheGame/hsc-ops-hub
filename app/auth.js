@@ -7,9 +7,10 @@ const TIMEOUT_MS    = 60 * 60 * 1000; // 60 minutes
 
 // ── Session storage ───────────────────────────────────────────────────────────
 
-function saveSession(token, user) {
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token, user }));
-  touchActivity();
+// The access token lasts about an hour. The refresh token gets a new one, so a
+// field shift longer than an hour doesn't start failing with 401s.
+function saveSession(session) {
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
 }
 
 function loadSession() {
@@ -46,7 +47,51 @@ async function supabaseLogin(email, password) {
 
   const data = await res.json();
   if (!res.ok) throw new Error(data.error_description || data.msg || 'Login failed');
-  return { token: data.access_token, user: data.user };
+  return toSession(data);
+}
+
+function toSession(data) {
+  return {
+    token:   data.access_token,
+    refresh: data.refresh_token,
+    expires: data.expires_at ? data.expires_at * 1000 : Date.now() + (data.expires_in || 3600) * 1000,
+    user:    data.user,
+  };
+}
+
+// One refresh at a time: Supabase rotates the refresh token, so two parallel
+// refreshes with the same token would make the second one fail.
+let refreshing = null;
+
+export function refreshAuthToken() {
+  if (refreshing) return refreshing;
+  refreshing = (async () => {
+    const session = loadSession();
+    if (!SUPABASE_URL || !session?.refresh) return null;
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: session.refresh }),
+      });
+      if (!res.ok) return null;
+      const next = toSession(await res.json());
+      // Logout may have cleared the session while the request was out.
+      if (!loadSession()) return null;
+      saveSession(next);
+      return next.token;
+    } catch {
+      return null;
+    } finally {
+      refreshing = null;
+    }
+  })();
+  return refreshing;
+}
+
+// Renew a minute early so a request doesn't go out with a token that runs out on the way.
+function expiresSoon(session, ms = 60_000) {
+  return session?.refresh && session.expires && session.expires - Date.now() < ms;
 }
 
 async function supabaseLogout(token) {
@@ -61,6 +106,14 @@ async function supabaseLogout(token) {
 
 export function getAuthToken() {
   return loadSession()?.token ?? null;
+}
+
+// Use this before any request that needs the token. After the phone sleeps,
+// timers don't run, so the token can be expired the moment the app wakes up.
+export async function getFreshToken() {
+  const session = loadSession();
+  if (expiresSoon(session)) return (await refreshAuthToken()) ?? session.token;
+  return session?.token ?? null;
 }
 
 export function getAuthUser() {
@@ -92,9 +145,10 @@ export function pingActivity() {
 }
 
 export async function login(email, password) {
-  const { token, user } = await supabaseLogin(email, password);
-  saveSession(token, user);
-  return user;
+  const session = await supabaseLogin(email, password);
+  saveSession(session);
+  touchActivity();
+  return session.user;
 }
 
 export async function logout() {
@@ -111,13 +165,15 @@ export function startActivityWatcher(onTimeout) {
   const events = ['click','keydown','touchstart','scroll'];
   events.forEach(e => document.addEventListener(e, pingActivity, { passive: true }));
 
-  // Check every 30 seconds
+  // Check every 30 seconds; renew the token 5 minutes before it runs out
   const interval = setInterval(() => {
     if (isTimedOut()) {
       clearInterval(interval);
       events.forEach(e => document.removeEventListener(e, pingActivity));
       onTimeout();
+      return;
     }
+    if (expiresSoon(loadSession(), 5 * 60_000)) refreshAuthToken();
   }, 30_000);
 
   return () => {

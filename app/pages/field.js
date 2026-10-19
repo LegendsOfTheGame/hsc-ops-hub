@@ -81,6 +81,37 @@ function saveCurrentBag(bag) {
   try { localStorage.setItem(BAG_KEY, JSON.stringify(bag)); } catch {}
 }
 
+// ── Pending saves ────────────────────────────────────────────────────────────
+// A bag row Supabase refused (no signal, revoked session…). The photo is
+// already on ImgBB, so the row — URL included — is kept here until Retry
+// saves it. Only the Bag Drop flow uses this.
+const PENDING_KEY = 'hsc2_pending_saves';
+
+function getPendingSaves() {
+  try { return JSON.parse(localStorage.getItem(PENDING_KEY)) || []; } catch { return []; }
+}
+
+function setPendingSaves(list) {
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify(list)); } catch {}
+}
+
+function addPendingSave(row) {
+  setPendingSaves([...getPendingSaves(), { id: `${Date.now()}`, row }]);
+}
+
+function removePendingSave(id) {
+  setPendingSaves(getPendingSaves().filter(p => p.id !== id));
+}
+
+// Insert a bag row. Returns null, 'fallback' (saved without the waste columns), or the error.
+async function saveBagRow(row) {
+  const { error } = await insert('field_logs', row);
+  if (!error) return null;
+  // Waste columns missing — keep the bag (details are in notes) and flag it
+  const { error: err2 } = await insert('field_logs', { ...row, bag_weight_kg: undefined, bag_minutes: undefined, item_counts: undefined, image_url: undefined, notes: `${row.notes} · photo ${row.image_url}` });
+  return err2 || 'fallback';
+}
+
 function startNewBag() {
   saveCurrentBag({ start: new Date().toISOString(), counts: {}, brands: {}, log: [] });
 }
@@ -155,6 +186,7 @@ export function countItems(counts) {
 
 let bagTicker = null;
 let refreshBagCard = () => {}; // redraws the Current Bag card; set while the Field page is open
+let refreshPending = () => {}; // redraws the Not Saved card; set while the Field page is open
 
 const IMGBB_KEY = '2972e511acdd923ba33c1bedd2af2ae7';
 const IMGBB_URL = 'https://api.imgbb.com/1/upload';
@@ -193,6 +225,8 @@ export async function renderField(root) {
         <div class="lbl">supply cost</div>
       </div>
     </div>
+
+    <div class="card" id="pending-saves" hidden></div>
 
     <div class="card current-bag">
       <div class="current-bag-head">
@@ -262,6 +296,7 @@ export async function renderField(root) {
   root.querySelector('#btn-bag').addEventListener('click', () => openBagModal(root));
   root.querySelector('#btn-bin').addEventListener('click', () => openBinModal(root));
   mountCurrentBag(root);
+  mountPendingSaves(root);
   root.querySelector('#btn-graffiti').addEventListener('click', () => openGraffitiModal(root));
   root.querySelector('#btn-supply').addEventListener('click', () => openSupplyModal(root));
   root.querySelector('#btn-bylaw').addEventListener('click', () => {
@@ -341,6 +376,65 @@ function mountCurrentBag(root) {
   refresh();
 }
 
+// ── Not Saved card (pending saves) ───────────────────────────────────────────
+
+const escHtml = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
+
+function mountPendingSaves(root) {
+  const card = root.querySelector('#pending-saves');
+
+  function refresh() {
+    if (!card.isConnected) { if (refreshPending === refresh) refreshPending = () => {}; return; }
+    const list = getPendingSaves();
+    card.hidden = !list.length;
+    if (!list.length) { card.innerHTML = ''; return; }
+    card.innerHTML = `
+      <div class="card-title" style="color:var(--danger)">⚠️ Not Saved (${list.length})</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Kept on this phone only. Tap Retry when you have signal.</div>
+      ${list.map(p => `
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border)">
+          ${p.row.image_url ? `<a href="${escHtml(p.row.image_url)}" target="_blank" rel="noopener" style="flex-shrink:0">📷</a>` : ''}
+          <div style="flex:1;min-width:0">
+            <div>${typeLabel(p.row)} · ${fmtDateTime(p.row.logged_at)}</div>
+            <div style="font-size:12px;color:var(--text-muted)">${escHtml(p.row.notes)}</div>
+          </div>
+          <button class="btn btn-sm btn-primary pending-retry" data-id="${p.id}">Retry</button>
+        </div>`).join('')}`;
+  }
+
+  card.addEventListener('click', async e => {
+    const btn = e.target.closest('.pending-retry');
+    if (!btn) return;
+    const pending = getPendingSaves().find(p => p.id === btn.dataset.id);
+    if (!pending) { refresh(); return; }
+    card.querySelectorAll('.pending-retry').forEach(b => { b.disabled = true; });
+    btn.textContent = 'Saving…';
+
+    // The first try may have reached Supabase before the reply was lost —
+    // a row with this photo means it is already saved; don't save it twice
+    const { data: existing } = pending.row.image_url
+      ? await select('field_logs', { filter: { image_url: pending.row.image_url }, limit: 1 })
+      : { data: null };
+    const result = existing?.length ? null : await saveBagRow(pending.row);
+
+    if (result && result !== 'fallback') {
+      showToast('Still not saved — check connection and try again', 'error');
+      refresh();
+      return;
+    }
+    removePendingSave(pending.id);
+    startNewBag(); // the bag is logged: clear the tally
+    refreshBagCard();
+    refresh();
+    showToast(result === 'fallback'
+      ? 'Bag saved, but weight/time columns are missing — run the schema.sql migration'
+      : '✓ Bag drop saved', result === 'fallback' ? 'error' : undefined);
+    loadFieldHistory(root, localDateStr());
+  });
+
+  refreshPending = refresh;
+  refresh();
+}
 
 async function loadFieldHistory(root, today) {
   const { data } = await select('field_logs', { filter: { date: today }, order: 'logged_at', ascending: false });
@@ -593,11 +687,18 @@ function openBagModal(root) {
         image_url: photoUrl,
         notes: summary.join(' · ') + (userNotes ? ` — ${userNotes}` : ''),
       };
-      let { error } = await insert('field_logs', row);
-      if (error) {
-        // Waste columns missing — keep the bag (details are in notes) and flag it
-        const { error: err2 } = await insert('field_logs', { ...row, bag_weight_kg: undefined, bag_minutes: undefined, item_counts: undefined, image_url: undefined, notes: `${row.notes} · photo ${photoUrl}` });
-        if (err2) { showToast('Failed to save — check connection', 'error'); releaseLog('bag_drop'); submitBtn.disabled = false; return; }
+      const result = await saveBagRow(row);
+      if (result && result !== 'fallback') {
+        // Refused: keep the whole row (photo URL included) on this phone for Retry.
+        // The tally stays until the retry succeeds.
+        addPendingSave(row);
+        releaseLog('bag_drop');
+        showToast('Not saved — kept on this phone. Tap Retry on the Field page', 'error');
+        closeModal();
+        refreshPending();
+        return;
+      }
+      if (result === 'fallback') {
         showToast('Bag saved, but weight/time columns are missing — run the schema.sql migration', 'error');
       } else {
         showToast(`✓ Bag drop logged (${color}${weightRaw > 0 ? `, ${weightRaw} ${unit}` : ''})`);

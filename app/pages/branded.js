@@ -6,7 +6,7 @@
 // posts sit beside the automated ones.
 
 import { select, insert } from '../db.js';
-import { getAuthToken } from '../auth.js';
+import { getFreshToken } from '../auth.js';
 
 // hsc-post-upload on our own domain (Linkly refuses workers.dev / r2.dev)
 const UPLOAD_WORKER_URL = 'https://media.hammerstreetclean.org';
@@ -737,7 +737,7 @@ export async function renderBranded(root) {
   async function saveToLibrary(file) {
     const sig = signature();
     if (sig === lastSaved) { status('Already in the Saved library.', 'ok'); return; }
-    const token = getAuthToken();
+    const token = await getFreshToken();
     if (!token) { status('Not saved to the library: sign in again.', 'bad'); return; }
 
     const slotKeys = { beforeafter: ['before', 'after'], single: ['main'], full: ['main'], text: [] }[s.layout];
@@ -914,7 +914,7 @@ function wireQueue(el, r) {
     try {
       const res = await fetch(`${UPLOAD_WORKER_URL}/draft`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${await getFreshToken()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image_url: r.image_url, headline: r.headline, subline: r.subline, caption_title: r.caption_title,
           caption_line: r.caption_line, body: r.body, label: r.label, hint: q('hint').value,
@@ -951,7 +951,7 @@ function wireQueue(el, r) {
     try {
       const res = await fetch(`${UPLOAD_WORKER_URL}/queue`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${await getFreshToken()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_url: r.image_url, caption, caption_short: q('short').value.trim(), channels, due_at: due }),
       });
       const j = await res.json().catch(() => ({}));
@@ -1030,7 +1030,7 @@ function showDetail(el, r) {
     try {
       const res = await fetch(`${UPLOAD_WORKER_URL}/link`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${await getFreshToken()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: o.key }),
       });
       const j = await res.json();
@@ -1055,7 +1055,7 @@ function showDetail(el, r) {
     btn.disabled = true;
     btn.textContent = 'Loading…';
     try {
-      const res = await fetch(`${UPLOAD_WORKER_URL}/original/${encodeURIComponent(o.key)}`, { headers: { Authorization: `Bearer ${getAuthToken()}` } });
+      const res = await fetch(`${UPLOAD_WORKER_URL}/original/${encodeURIComponent(o.key)}`, { headers: { Authorization: `Bearer ${await getFreshToken()}` } });
       if (!res.ok) throw new Error();
       const url = URL.createObjectURL(await res.blob());
       const name = o.key.split('/').pop();

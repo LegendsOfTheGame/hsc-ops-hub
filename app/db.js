@@ -1,17 +1,25 @@
 // Supabase REST client with localStorage offline fallback
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { getAuthToken } from './auth.js';
+import { getFreshToken, refreshAuthToken } from './auth.js';
 
 const configured = () => Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
-function headers(extra = {}) {
-  const token = getAuthToken();
+function headers(token, extra = {}) {
   return {
     'apikey': SUPABASE_ANON_KEY,
     'Authorization': `Bearer ${token || SUPABASE_ANON_KEY}`,
     'Content-Type': 'application/json',
     ...extra,
   };
+}
+
+// A 401 means the token ran out (e.g. the phone slept past its expiry).
+// Renew it once and send the same request again.
+async function request(url, { extraHeaders, ...opts } = {}) {
+  const res = await fetch(url, { ...opts, headers: headers(await getFreshToken(), extraHeaders) });
+  if (res.status !== 401) return res;
+  const token = await refreshAuthToken();
+  return token ? fetch(url, { ...opts, headers: headers(token, extraHeaders) }) : res;
 }
 
 // SELECT rows from a table
@@ -27,7 +35,7 @@ export async function select(table, { filter = {}, order = null, ascending = tru
   if (offset) url += `&offset=${offset}`;
 
   try {
-    const res = await fetch(url, { headers: headers() });
+    const res = await request(url);
     const data = await res.json();
     return res.ok ? { data, error: null } : { data: null, error: data };
   } catch (e) {
@@ -43,9 +51,9 @@ export async function insert(table, row) {
   if (!configured()) return localInsert(table, newRow);
 
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    const res = await request(`${SUPABASE_URL}/rest/v1/${table}`, {
       method: 'POST',
-      headers: headers({ 'Prefer': 'return=representation' }),
+      extraHeaders: { 'Prefer': 'return=representation' },
       body: JSON.stringify(newRow),
     });
     const data = await res.json();
@@ -65,9 +73,9 @@ export async function update(table, filter, changes) {
   }
 
   try {
-    const res = await fetch(url, {
+    const res = await request(url, {
       method: 'PATCH',
-      headers: headers({ 'Prefer': 'return=representation' }),
+      extraHeaders: { 'Prefer': 'return=representation' },
       body: JSON.stringify({ ...changes, updated_at: new Date().toISOString() }),
     });
     const data = await res.json();
@@ -87,7 +95,7 @@ export async function remove(table, filter) {
   }
 
   try {
-    const res = await fetch(url, { method: 'DELETE', headers: headers() });
+    const res = await request(url, { method: 'DELETE' });
     return res.ok ? { error: null } : { error: await res.json() };
   } catch (e) {
     return { error: e.message };
