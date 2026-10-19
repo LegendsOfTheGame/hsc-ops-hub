@@ -60,6 +60,9 @@ function applyRole(role) {
     if (!allowed.includes(el.dataset.page)) el.style.display = 'none';
   });
 
+  // Links only the admin can open (e.g. The Barton Line, a private claude.ai page)
+  document.querySelectorAll('.nav-admin-only').forEach(el => el.style.display = 'none');
+
   // Hide all dividers for restricted users (too few items to need them)
   document.querySelectorAll('.nav-divider').forEach(el => el.style.display = 'none');
 
