@@ -337,6 +337,14 @@ create table if not exists street_points (
   created_at      timestamptz default now()
 );
 
+-- Migration 2026-10-18 — after the first survey walk (v2.21.0). Safe to re-run.
+alter table street_survey add column if not exists outside_bia boolean default false; -- replaces the 'Outside BIA' type
+alter table street_survey add column if not exists half        boolean default false; -- 695½
+alter table street_survey add column if not exists website     text;
+alter table street_points add column if not exists bin_type    text;                  -- Business bin: Trash | Cardboard
+alter table street_points add column if not exists no_stop_number boolean;            -- HSR stop with no number on the sign
+-- kind now also takes: Canada Post mailbox | Sharps box
+
 alter table street_points enable row level security;
 do $$ begin
   create policy "Authenticated users only" on street_points

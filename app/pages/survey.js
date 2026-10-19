@@ -15,10 +15,14 @@ const STREETS = [
   'Wentworth St N', 'Cheever St', 'William St', 'Sanford Ave N', 'Minto Ave',
   'Westinghouse Ave', 'Stirton St', 'Milton Ave', 'Birch Ave', 'Fullerton Ave',
   'Gibson Ave', 'Chestnut Ave', 'Kinrade Ave', 'Earl St', 'Sherman Ave N',
+  // East of Sherman — outside the BIA
+  'St Ann St', 'Ruth St', 'Saint Olga St', 'Barnesdale Ave N',
 ];
+const OUTSIDE_STREETS = new Set(['St Ann St', 'Ruth St', 'Saint Olga St', 'Barnesdale Ave N']);
+const BIA_BARTON = [165, 673]; // Barton St E civic numbers from Ferguson to Sherman
 
 // levy: commercial tax class, so the BIA levy is on its property tax bill
-// (vacant storefronts included).
+// (vacant storefronts included). Places outside the BIA never count.
 const CATEGORIES = [
   { key: 'Business',             levy: true  },
   { key: 'Vacant storefront',    levy: true  },
@@ -29,17 +33,17 @@ const CATEGORIES = [
   { key: 'City-owned',           levy: false },
   { key: 'Vacant lot / parking', levy: false },
   { key: 'Other',                levy: false },
-  // East of Sherman or west of Ferguson: recorded for outreach, never in the levy count
-  { key: 'Outside BIA',          levy: false },
 ];
 const LEVY = new Set(CATEGORIES.filter(c => c.levy).map(c => c.key));
+const paysLevy = e => !e.outside_bia && LEVY.has(e.category);
 
-const FIELDS = ['category', 'business_name', 'contact_phone', 'contact_email', 'notes'];
+const FIELDS = ['category', 'business_name', 'contact_phone', 'contact_email', 'website', 'notes'];
 const GOOD_FIX_M = 15; // a fix this tight is good enough to place a point on OSM
 
 // Map points: street furniture with no address, saved to street_points.
 // Business bins are only the two HSC has access to.
 const BUSINESS_BINS = ['541 Barton St E', '673 Barton St E (West Side Beef)'];
+const BIN_TYPES = ['Trash', 'Cardboard'];
 const REPEAT_MS = 10_000; // two City bins can't be 10 s apart on foot
 
 const QUEUE_KEY  = 'hsc2_survey_queue';
@@ -51,7 +55,19 @@ let lastPoint = { kind: null, at: 0 };
 let fix = null;          // latest GPS fix { lat, lng, acc, at }
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
-const addressKey = (num, unit, street) => `${num}${unit} ${street}`;
+// '711B Barton St E', '695½ Barton St E', '102-659 Barton St E' (numbered units go in front, Canada Post style)
+const addressKey = (num, unit, street, half = false) => {
+  const civic = `${num}${half ? '½' : ''}`;
+  if (!unit) return `${civic} ${street}`;
+  return /^[A-Z]$/.test(unit) ? `${civic}${unit} ${street}` : `${unit}-${civic} ${street}`;
+};
+// Default for the Outside BIA box; Haven can untick it.
+// Sherman Ave N north of Barton is outside except Pinch at 183 (Haven, 18 Oct 2026).
+const SHERMAN_IN_BIA = new Set([183]);
+const outsideByRule = (num, street) =>
+  OUTSIDE_STREETS.has(street)
+  || (street === 'Barton St E' && (num < BIA_BARTON[0] || num > BIA_BARTON[1]))
+  || (street === 'Sherman Ave N' && !SHERMAN_IN_BIA.has(num));
 
 export async function renderSurvey(root) {
   let street = 'Barton St E';
@@ -66,11 +82,13 @@ export async function renderSurvey(root) {
       <div class="sv-gps" id="sv-gps">GPS: starting…</div>
       <div class="sv-addr">
         <input type="text" id="sv-num" inputmode="numeric" pattern="[0-9]*" placeholder="Number" autocomplete="off">
-        <input type="text" id="sv-unit" maxlength="1" placeholder="Unit" autocomplete="off" autocapitalize="characters">
+        <label class="sv-half"><input type="checkbox" id="sv-half"> ½</label>
+        <input type="text" id="sv-unit" maxlength="4" placeholder="Unit" autocomplete="off" autocapitalize="characters">
       </div>
       <select id="sv-street">
         ${STREETS.map(s => `<option${s === street ? ' selected' : ''}>${s}</option>`).join('')}
       </select>
+      <label class="sv-check"><input type="checkbox" id="sv-outside"> <span>Outside the BIA<small>Ticks itself past Sherman or Ferguson. Untick if wrong.</small></span></label>
       <div class="sv-hint" id="sv-hint"></div>
       <select id="sv-category">
         <option value="">Type…</option>
@@ -79,6 +97,7 @@ export async function renderSurvey(root) {
       <input type="text" id="sv-business_name" placeholder="Name on the sign" autocomplete="off">
       <input type="tel" id="sv-contact_phone" placeholder="Phone (if posted)" autocomplete="off">
       <input type="email" id="sv-contact_email" placeholder="Email (e.g. property manager)" autocomplete="off" autocapitalize="none">
+      <input type="url" id="sv-website" placeholder="Website or Instagram" autocomplete="off" autocapitalize="none">
       <textarea id="sv-notes" rows="2" placeholder="Notes"></textarea>
       <button class="btn btn-primary sv-save" id="sv-save">Save</button>
     </div>
@@ -89,12 +108,16 @@ export async function renderSurvey(root) {
         <button class="sv-pt" data-kind="City litter bin">🗑️<span>City bin</span><small>saves on tap</small></button>
         <button class="sv-pt" data-kind="Business bin">🚮<span>Business bin</span></button>
         <button class="sv-pt" data-kind="HSR stop">🚏<span>HSR stop</span></button>
+        <button class="sv-pt" data-kind="Canada Post mailbox">📮<span>Mailbox</span><small>saves on tap</small></button>
+        <button class="sv-pt" data-kind="Sharps box">💉<span>Sharps box</span><small>saves on tap</small></button>
       </div>
-      <div id="sv-pt-business" hidden>
+      <div id="sv-pt-business" hidden class="sv-pt-hsr">
         <select id="sv-pt-biz">${BUSINESS_BINS.map(b => `<option>${esc(b)}</option>`).join('')}</select>
+        <select id="sv-pt-bintype">${BIN_TYPES.map(b => `<option>${b}</option>`).join('')}</select>
       </div>
       <div id="sv-pt-hsr" hidden class="sv-pt-hsr">
         <input type="text" id="sv-pt-stop" inputmode="numeric" pattern="[0-9]*" placeholder="Stop number (on the sign)" autocomplete="off">
+        <label><input type="checkbox" id="sv-pt-nonum"> No number on the sign</label>
         <label><input type="checkbox" id="sv-pt-shelter"> Shelter</label>
         <label><input type="checkbox" id="sv-pt-bench"> Bench</label>
       </div>
@@ -121,7 +144,8 @@ export async function renderSurvey(root) {
   const streetEl = root.querySelector('#sv-street');
 
   numEl.addEventListener('input', () => { numEl.value = numEl.value.replace(/\D/g, ''); onAddressChange(root); });
-  unitEl.addEventListener('input', () => { unitEl.value = unitEl.value.replace(/[^a-z]/gi, '').toUpperCase(); onAddressChange(root); });
+  unitEl.addEventListener('input', () => { unitEl.value = unitEl.value.replace(/[^a-z0-9]/gi, '').toUpperCase(); onAddressChange(root); });
+  root.querySelector('#sv-half').addEventListener('change', () => onAddressChange(root));
   streetEl.addEventListener('change', () => {
     try { localStorage.setItem(STREET_KEY, streetEl.value); } catch {}
     onAddressChange(root);
@@ -130,6 +154,9 @@ export async function renderSurvey(root) {
   wirePoints(root);
 
   startGPS(root);
+  // Any tap or typing on the page wakes the GPS after an idle pause
+  root.addEventListener('pointerdown', () => wakeGPS(root));
+  root.addEventListener('input', () => wakeGPS(root));
   loadPoints(root);
 
   const { data, error } = await select('street_survey', { filter: { round: ROUND }, order: 'logged_at', ascending: false });
@@ -149,26 +176,42 @@ export async function renderSurvey(root) {
 }
 
 // ── GPS ──────────────────────────────────────────────────────────────────────
-// Watch only while this page is open (battery): stops once the page is left.
+// Battery: the phone died after 2½ hours of constant GPS on 16 Oct. The watch
+// now stops after 90 s with no tap or typing, and when the page is left; any
+// tap wakes it. A fix older than 30 s is never used for a save.
+
+const GPS_IDLE_MS = 90_000;
+let gpsWatch = null, gpsIdle = null, gpsGuard = null;
 
 function startGPS(root) {
   const el = root.querySelector('#sv-gps');
   if (!navigator.geolocation) { el.textContent = 'GPS: not available on this device'; return; }
-  const id = navigator.geolocation.watchPosition(
-    pos => {
-      fix = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy), at: Date.now() };
-      showFix(el);
-    },
-    err => { el.textContent = `GPS: ${err.message}`; el.className = 'sv-gps sv-gps-bad'; },
-    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
-  );
-  const stop = setInterval(() => {
-    if (root.isConnected && el.isConnected) return;
-    navigator.geolocation.clearWatch(id);
-    clearInterval(stop);
-    fix = null;
-  }, 3000);
+  if (gpsWatch === null) {
+    el.textContent = 'GPS: starting…'; el.className = 'sv-gps';
+    gpsWatch = navigator.geolocation.watchPosition(
+      pos => {
+        fix = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy), at: Date.now() };
+        showFix(el);
+      },
+      err => { el.textContent = `GPS: ${err.message}`; el.className = 'sv-gps sv-gps-bad'; },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+    );
+  }
+  clearTimeout(gpsIdle);
+  gpsIdle = setTimeout(() => stopGPS(el, 'GPS paused to save battery — tap anywhere to resume'), GPS_IDLE_MS);
+  clearInterval(gpsGuard);
+  gpsGuard = setInterval(() => { if (!root.isConnected || !el.isConnected) stopGPS(null); }, 3000);
 }
+
+function stopGPS(el, message) {
+  if (gpsWatch !== null) navigator.geolocation.clearWatch(gpsWatch);
+  gpsWatch = null; fix = null;
+  clearTimeout(gpsIdle);
+  if (!el) clearInterval(gpsGuard);
+  if (el?.isConnected) { el.textContent = message; el.className = 'sv-gps sv-gps-weak'; }
+}
+
+function wakeGPS(root) { startGPS(root); }
 
 function showFix(el) {
   if (!el?.isConnected || !fix) return;
@@ -184,23 +227,26 @@ function readAddress(root) {
     num:    root.querySelector('#sv-num').value.trim(),
     unit:   root.querySelector('#sv-unit').value.trim().toUpperCase(),
     street: root.querySelector('#sv-street').value,
+    half:   root.querySelector('#sv-half').checked,
   };
 }
 
 // An address already recorded this round loads its details for editing
 let loadedKey = null;
 function onAddressChange(root) {
-  const { num, unit, street } = readAddress(root);
-  const key = num ? addressKey(num, unit, street) : null;
+  const { num, unit, street, half } = readAddress(root);
+  const key = num ? addressKey(num, unit, street, half) : null;
   const prev = key ? entries.get(key) : null;
   const hint = root.querySelector('#sv-hint');
+  const outside = root.querySelector('#sv-outside');
   hint.innerHTML = prev ? `<span class="badge badge-warning">Already recorded</span> editing — Save updates it` : '';
   if (prev) {
     for (const f of FIELDS) root.querySelector(`#sv-${f}`).value = prev[f] || '';
+    outside.checked = Boolean(prev.outside_bia);
     loadedKey = key;
-  } else if (loadedKey) {
-    clearDetails(root);
-    loadedKey = null;
+  } else {
+    if (loadedKey) { clearDetails(root); loadedKey = null; }
+    if (num) outside.checked = outsideByRule(Number(num), street);
   }
 }
 
@@ -209,14 +255,15 @@ function clearDetails(root) {
 }
 
 async function save(root) {
-  const { num, unit, street } = readAddress(root);
+  const { num, unit, street, half } = readAddress(root);
   const numEl = root.querySelector('#sv-num');
   if (!num) { showToast('Type the number first'); numEl.focus(); return; }
   const details = {};
   for (const f of FIELDS) details[f] = root.querySelector(`#sv-${f}`).value.trim() || null;
   if (!details.category) { showToast('Pick a type'); root.querySelector('#sv-category').focus(); return; }
+  details.outside_bia = root.querySelector('#sv-outside').checked;
 
-  const key = addressKey(num, unit, street);
+  const key = addressKey(num, unit, street, half);
   const existing = entries.get(key);
   const fresh = fix && Date.now() - fix.at < 30_000 ? fix : null;
   // Keep an earlier good point if this save has none, or only a worse one
@@ -238,7 +285,7 @@ async function save(root) {
     const item = q.find(x => x.op === 'insert' && x.row.address_key === key);
     if (item) { Object.assign(item.row, changes); saveQueue(q); }
   } else {
-    const row = { round: ROUND, address_key: key, civic: Number(num), unit: unit || null, street, ...changes };
+    const row = { round: ROUND, address_key: key, civic: Number(num), half, unit: unit || null, street, ...changes };
     entries.set(key, { ...row, pending: true });
     const { data, error } = await insert('street_survey', row);
     if (error || !data?.id) { queuePush({ op: 'insert', row }); offlineToast(); }
@@ -249,6 +296,7 @@ async function save(root) {
   showToast(`✓ ${key}${saved.lat == null ? ' — no GPS point' : ''}`);
   numEl.value = '';
   root.querySelector('#sv-unit').value = '';
+  root.querySelector('#sv-half').checked = false;
   clearDetails(root);
   loadedKey = null;
   root.querySelector('#sv-hint').innerHTML = '';
@@ -263,12 +311,14 @@ function renderStats(root) {
   const el = root.querySelector('#sv-stats');
   if (!el) return;
   const all = [...entries.values()].filter(e => e.category);
-  const levy = all.filter(e => LEVY.has(e.category)).length;
+  const inside = all.filter(e => !e.outside_bia);
+  const levy = inside.filter(paysLevy).length;
   const mapped = all.filter(e => e.lat != null && e.gps_acc <= GOOD_FIX_M).length;
   el.innerHTML = `
     <div class="session-stat"><div class="num">${all.length}</div><div class="lbl">recorded</div></div>
     <div class="session-stat"><div class="num">${levy}</div><div class="lbl">pay the levy</div></div>
-    <div class="session-stat"><div class="num">${all.length - levy}</div><div class="lbl">don't pay</div></div>
+    <div class="session-stat"><div class="num">${inside.length - levy}</div><div class="lbl">in the BIA, don't pay</div></div>
+    <div class="session-stat"><div class="num">${all.length - inside.length}</div><div class="lbl">outside the BIA</div></div>
     <div class="session-stat"><div class="num">${mapped}</div><div class="lbl">good map point</div></div>
   `;
 }
@@ -281,12 +331,13 @@ function renderRecent(root) {
   if (!rows.length) { wrap.innerHTML = `<div class="sv-muted">Nothing recorded yet.</div>`; return; }
   wrap.innerHTML = rows.map(r => {
     const gps = r.lat == null ? 'no GPS' : `GPS ±${r.gps_acc} m${r.gps_acc > GOOD_FIX_M ? ' (weak)' : ''}`;
-    const sub = [r.business_name, r.contact_phone, r.contact_email].filter(Boolean).map(esc).join(' · ');
+    const sub = [r.business_name, r.contact_phone, r.contact_email, r.website].filter(Boolean).map(esc).join(' · ');
     return `
     <div class="sv-row">
       <div class="sv-row-main" data-key="${esc(r.address_key)}">
         <strong>${esc(r.address_key)}</strong>
-        <span class="badge ${LEVY.has(r.category) ? 'badge-accent' : 'badge-muted'}">${esc(r.category)}</span>
+        <span class="badge ${paysLevy(r) ? 'badge-accent' : 'badge-muted'}">${esc(r.category)}</span>
+        ${r.outside_bia ? `<span class="badge badge-info">Outside BIA</span>` : ''}
         ${sub ? `<div class="sv-meta">${sub}</div>` : ''}
         ${r.notes ? `<div class="sv-meta sv-muted">${esc(r.notes)}</div>` : ''}
         <div class="sv-muted sv-meta">${fmtDateTime(r.logged_at)} · ${gps}${r.pending ? ' · waiting to sync' : ''}</div>
@@ -304,6 +355,7 @@ function loadIntoForm(root, key) {
   if (!e) return;
   root.querySelector('#sv-num').value = e.civic ?? '';
   root.querySelector('#sv-unit').value = e.unit || '';
+  root.querySelector('#sv-half').checked = Boolean(e.half);
   const st = root.querySelector('#sv-street');
   if (STREETS.includes(e.street)) st.value = e.street;
   onAddressChange(root);
@@ -382,14 +434,19 @@ async function loadPoints(root) {
 
 let pointKind = null; // panel open for 'Business bin' | 'HSR stop'
 
+const ONE_TAP = new Set(['City litter bin', 'Canada Post mailbox', 'Sharps box']);
+
 function wirePoints(root) {
+  const stopEl = root.querySelector('#sv-pt-stop');
+  const noNum  = root.querySelector('#sv-pt-nonum');
+  noNum.addEventListener('change', () => { stopEl.disabled = noNum.checked; if (noNum.checked) stopEl.value = ''; });
   const bizPanel = root.querySelector('#sv-pt-business');
   const hsrPanel = root.querySelector('#sv-pt-hsr');
   const saveBtn  = root.querySelector('#sv-pt-save');
 
   root.querySelectorAll('.sv-pt').forEach(b => b.addEventListener('click', () => {
     const kind = b.dataset.kind;
-    if (kind === 'City litter bin') { savePoint(root, { kind }); return; }
+    if (ONE_TAP.has(kind)) { savePoint(root, { kind }); return; }
     pointKind = pointKind === kind ? null : kind; // second tap closes the panel
     root.querySelectorAll('.sv-pt').forEach(x => x.classList.toggle('selected', x.dataset.kind === pointKind));
     bizPanel.hidden = pointKind !== 'Business bin';
@@ -400,11 +457,15 @@ function wirePoints(root) {
 
   saveBtn.addEventListener('click', () => {
     if (pointKind === 'Business bin') {
-      savePoint(root, { kind: pointKind, business: root.querySelector('#sv-pt-biz').value });
+      savePoint(root, { kind: pointKind, business: root.querySelector('#sv-pt-biz').value, bin_type: root.querySelector('#sv-pt-bintype').value });
     } else if (pointKind === 'HSR stop') {
+      // A blank stop number used to get filled with 9999 / 000000; ask for the box instead
+      const ref = stopEl.value.replace(/\D/g, '');
+      if (!ref && !noNum.checked) { showToast('Type the stop number, or tick "No number on the sign"'); stopEl.focus(); return; }
       savePoint(root, {
         kind: pointKind,
-        stop_ref: root.querySelector('#sv-pt-stop').value.replace(/\D/g, '') || null,
+        stop_ref: noNum.checked ? null : ref,
+        no_stop_number: noNum.checked,
         shelter: root.querySelector('#sv-pt-shelter').checked,
         bench:   root.querySelector('#sv-pt-bench').checked,
       });
@@ -415,7 +476,7 @@ function wirePoints(root) {
 async function savePoint(root, details) {
   // A point without GPS can't go on the map
   const fresh = fix && Date.now() - fix.at < 30_000 ? fix : null;
-  if (!fresh) { showToast('No GPS fix yet — a map point needs one', 'error'); return; }
+  if (!fresh) { showToast('No GPS fix yet — wait for the GPS line to turn green, then tap again', 'error'); return; }
   if (fresh.acc > GOOD_FIX_M && !confirm(`GPS is weak (±${fresh.acc} m). Save anyway?`)) return;
   if (details.kind === lastPoint.kind && Date.now() - lastPoint.at < REPEAT_MS) {
     showToast(`${details.kind} saved seconds ago — not saved twice`, 'error');
@@ -427,7 +488,9 @@ async function savePoint(root, details) {
     round: ROUND,
     kind: details.kind,
     business: details.business ?? null,
+    bin_type: details.bin_type ?? null,
     stop_ref: details.stop_ref ?? null,
+    no_stop_number: details.no_stop_number ?? null,
     shelter: details.shelter ?? null,
     bench: details.bench ?? null,
     notes: root.querySelector('#sv-pt-note').value.trim() || null,
@@ -445,6 +508,8 @@ async function savePoint(root, details) {
   showToast(`✓ ${details.kind} mapped (±${fresh.acc} m)`);
   root.querySelector('#sv-pt-note').value = '';
   root.querySelector('#sv-pt-stop').value = '';
+  root.querySelector('#sv-pt-stop').disabled = false;
+  root.querySelector('#sv-pt-nonum').checked = false;
   root.querySelector('#sv-pt-shelter').checked = false;
   root.querySelector('#sv-pt-bench').checked = false;
   renderPoints(root);
@@ -455,10 +520,10 @@ function renderPoints(root) {
   if (!wrap) return;
   const n = k => points.filter(p => p.kind === k).length;
   root.querySelector('#sv-points-title').textContent =
-    `Mapped points · ${n('City litter bin')} City bins · ${n('Business bin')} business bins · ${n('HSR stop')} HSR stops`;
+    `Mapped points · ${n('City litter bin')} City bins · ${n('Business bin')} business bins · ${n('HSR stop')} HSR stops · ${n('Canada Post mailbox')} mailboxes · ${n('Sharps box')} sharps boxes`;
   if (!points.length) { wrap.innerHTML = `<div class="sv-muted">Nothing mapped yet.</div>`; return; }
   wrap.innerHTML = points.map((p, i) => {
-    const extra = p.kind === 'Business bin' ? esc(p.business)
+    const extra = p.kind === 'Business bin' ? [p.business, p.bin_type].filter(Boolean).map(esc).join(' · ')
       : p.kind === 'HSR stop' ? [p.stop_ref ? `stop ${esc(p.stop_ref)}` : 'no stop number', p.shelter ? 'shelter' : null, p.bench ? 'bench' : null].filter(Boolean).join(' · ')
       : '';
     return `
