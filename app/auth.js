@@ -9,25 +9,39 @@ const TIMEOUT_MS    = 60 * 60 * 1000; // 60 minutes
 
 // The access token lasts about an hour. The refresh token gets a new one, so a
 // field shift longer than an hour doesn't start failing with 401s.
+// localStorage, not sessionStorage: iOS closes a home-screen app when the
+// screen locks, and the relaunch starts with an empty sessionStorage.
+// The 60-minute inactivity timeout still applies across relaunches.
 function saveSession(session) {
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
 }
 
 function loadSession() {
-  try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch { return null; }
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; }
 }
 
 function clearSession() {
-  sessionStorage.removeItem(SESSION_KEY);
-  sessionStorage.removeItem(ACTIVITY_KEY);
+  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(ACTIVITY_KEY);
 }
 
 function touchActivity() {
-  sessionStorage.setItem(ACTIVITY_KEY, Date.now().toString());
+  localStorage.setItem(ACTIVITY_KEY, Date.now().toString());
 }
 
+// One-time move of a login made before v2.22.1, so nobody has to sign in again.
+try {
+  if (!localStorage.getItem(SESSION_KEY) && sessionStorage.getItem(SESSION_KEY)) {
+    localStorage.setItem(SESSION_KEY, sessionStorage.getItem(SESSION_KEY));
+    const last = sessionStorage.getItem(ACTIVITY_KEY);
+    if (last) localStorage.setItem(ACTIVITY_KEY, last);
+  }
+  sessionStorage.removeItem(SESSION_KEY);
+  sessionStorage.removeItem(ACTIVITY_KEY);
+} catch {}
+
 function isTimedOut() {
-  const last = parseInt(sessionStorage.getItem(ACTIVITY_KEY) || '0', 10);
+  const last = parseInt(localStorage.getItem(ACTIVITY_KEY) || '0', 10);
   return last > 0 && Date.now() - last > TIMEOUT_MS;
 }
 
@@ -96,7 +110,9 @@ function expiresSoon(session, ms = 60_000) {
 
 async function supabaseLogout(token) {
   if (!SUPABASE_URL || !token) return;
-  await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+  // scope=local ends only this device's session. The default (global) also
+  // signs out the phone when the PC signs out or times out.
+  await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=local`, {
     method: 'POST',
     headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${token}` },
   }).catch(() => {});
