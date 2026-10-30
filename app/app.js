@@ -91,6 +91,19 @@ function roundToQuarter(date) {
   return d;
 }
 
+// Latest end a shift can have: 17:30 on the start day. A start after 11:00 pushes it
+// 15 min later for every 15-min block (or part of one) past 11:00.
+function shiftCutoff(start) {
+  const s = new Date(start);
+  const eleven = new Date(s);
+  eleven.setHours(11, 0, 0, 0);
+  const blocks = Math.max(0, Math.ceil((s - eleven) / 900_000));
+  const cutoff = new Date(s);
+  cutoff.setHours(17, 30, 0, 0);
+  cutoff.setMinutes(cutoff.getMinutes() + blocks * 15);
+  return cutoff;
+}
+
 function getPunch() {
   try { return JSON.parse(localStorage.getItem(PUNCH_KEY)); } catch { return null; }
 }
@@ -102,11 +115,40 @@ function initPunchClock() {
   if (!btn) return;
 
   let ticker = null;
+  let saving = false;
+
+  // The open shift stays on the phone until Supabase accepts it — a refused save is never lost
+  async function endShift(punch, endTime, auto) {
+    if (saving) return;
+    saving = true;
+    const ms    = endTime.getTime() - new Date(punch.start).getTime();
+    const hours = Math.round((ms / 3600000) * 100) / 100;
+    const { error } = await insert('shifts', {
+      date:       punch.date,
+      hours,
+      start_time: punch.start,
+      end_time:   endTime.toISOString(),
+      notes:      auto ? 'Clocked via punch clock · ended automatically at cutoff' : 'Clocked via punch clock',
+    });
+    saving = false;
+    if (error) {
+      showToast('Shift record failed to save — still open, try End Shift again', 'error');
+      return;
+    }
+    localStorage.removeItem(PUNCH_KEY);
+    const at = endTime.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
+    if (auto) showToast(`Shift ended automatically at ${at} — ${hours.toFixed(2)} hrs`, 'info', 6000);
+    else      showToast(`Shift saved — ${hours.toFixed(2)} hrs`);
+    updateDisplay();
+    navigate('shifts');
+  }
 
   function tick() {
     const punch = getPunch();
     if (!punch) return;
     if (document.hidden) return; // nothing to redraw while the phone is locked / app in background
+    const cutoff = shiftCutoff(punch.start);
+    if (Date.now() >= cutoff.getTime()) { endShift(punch, cutoff, true); return; }
     const ms = Date.now() - new Date(punch.start).getTime();
     const h  = Math.floor(ms / 3600000);
     const m  = Math.floor((ms % 3600000) / 60000);
@@ -140,23 +182,11 @@ function initPunchClock() {
         date: localDateStr(now),
       }));
     } else {
-      const endTime = roundToQuarter(new Date());
-      const ms    = endTime.getTime() - new Date(punch.start).getTime();
-      const hours = Math.round((ms / 3600000) * 100) / 100;
-      localStorage.removeItem(PUNCH_KEY);
-      try {
-        await insert('shifts', {
-          date:       punch.date,
-          hours,
-          start_time: punch.start,
-          end_time:   endTime.toISOString(),
-          notes:      'Clocked via punch clock',
-        });
-        showToast(`Shift saved — ${hours.toFixed(2)} hrs`);
-        navigate('shifts');
-      } catch {
-        showToast('Shift record failed to save', 4000);
-      }
+      const cutoff  = shiftCutoff(punch.start);
+      const rounded = roundToQuarter(new Date());
+      const auto    = rounded >= cutoff;
+      await endShift(punch, auto ? cutoff : rounded, auto);
+      return;
     }
     updateDisplay();
   });
