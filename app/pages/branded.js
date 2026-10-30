@@ -7,9 +7,7 @@
 
 import { select, insert } from '../db.js';
 import { getFreshToken } from '../auth.js';
-
-// hsc-post-upload on our own domain (Linkly refuses workers.dev / r2.dev)
-const UPLOAD_WORKER_URL = 'https://media.hammerstreetclean.org';
+import { UPLOAD_WORKER_URL } from '../config.js';
 
 const W = 1080, H = 1440;
 const M = 56;                       // side margin, same as the workers

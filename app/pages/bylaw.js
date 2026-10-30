@@ -1,9 +1,7 @@
 import { select, insert, update } from '../db.js';
 import { showToast, localDateStr, openModal, closeModal, shrinkPhoto } from '../utils.js';
 import { FINES, FINES_SOURCE } from '../bylaw-fines.js';
-
-const IMGBB_KEY = '2972e511acdd923ba33c1bedd2af2ae7';
-const IMGBB_URL = 'https://api.imgbb.com/1/upload';
+import { uploadPhoto } from '../photos.js';
 const CITY_URL  = 'https://services.my.hamilton.ca/reportaproblem/';
 
 const CATEGORIES = [
@@ -575,19 +573,13 @@ async function submitBylaw(root, wrap, photos) {
   const submitBtn = wrap.querySelector('#bf-submit');
   submitBtn.disabled = true;
 
-  // Upload photos to imgbb
+  // Upload photos (ImgBB, R2 if ImgBB is down)
   const imageUrls = [];
   if (photos.length) {
     submitBtn.textContent = `Uploading photo${photos.length > 1 ? 's' : ''}…`;
     for (const p of photos) {
-      try {
-        const fd = new FormData();
-        fd.append('key', IMGBB_KEY);
-        fd.append('image', p.base64);
-        const res  = await fetch(IMGBB_URL, { method: 'POST', body: fd });
-        const json = await res.json();
-        if (json.success) imageUrls.push(json.data.url);
-      } catch { /* skip failed upload, don't block the report */ }
+      const url = await uploadPhoto(p.base64);
+      if (url) imageUrls.push(url); // skip failed upload, don't block the report
     }
   }
 

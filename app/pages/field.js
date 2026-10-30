@@ -1,5 +1,6 @@
 import { select, insert, update } from '../db.js';
 import { showToast, openModal, closeModal, getGPS, coordsStr, initChips, chipValue, localDateStr, fmtDateTime, shrinkPhoto } from '../utils.js';
+import { uploadPhoto } from '../photos.js';
 
 const SURFACES   = ['Brick','Metal','Glass','Plastic','Concrete','Wood','Other'];
 const SEVERITIES = ['Minor','Moderate','Major'];
@@ -83,7 +84,7 @@ function saveCurrentBag(bag) {
 
 // ── Pending saves ────────────────────────────────────────────────────────────
 // A bag row Supabase refused (no signal, revoked session…). The photo is
-// already on ImgBB, so the row — URL included — is kept here until Retry
+// already uploaded (ImgBB or R2), so the row — URL included — is kept here until Retry
 // saves it. Only the Bag Drop flow uses this.
 const PENDING_KEY = 'hsc2_pending_saves';
 
@@ -187,9 +188,6 @@ export function countItems(counts) {
 let bagTicker = null;
 let refreshBagCard = () => {}; // redraws the Current Bag card; set while the Field page is open
 let refreshPending = () => {}; // redraws the Not Saved card; set while the Field page is open
-
-const IMGBB_KEY = '2972e511acdd923ba33c1bedd2af2ae7';
-const IMGBB_URL = 'https://api.imgbb.com/1/upload';
 
 let propertiesCache = null;
 
@@ -712,17 +710,6 @@ function openBagModal(root) {
   });
 }
 
-async function uploadPhoto(base64) {
-  try {
-    const fd = new FormData();
-    fd.append('key', IMGBB_KEY);
-    fd.append('image', base64);
-    const res  = await fetch(IMGBB_URL, { method: 'POST', body: fd });
-    const json = await res.json();
-    return json.success ? json.data.url : null;
-  } catch { return null; }
-}
-
 // ── Full bin modal ───────────────────────────────────────────────────────────
 
 function openBinModal(root) {
@@ -956,14 +943,7 @@ async function openGraffitiModal(root) {
       let imageUrl = null;
       if (photoBase64) {
         submitBtn.textContent = 'Uploading…';
-        try {
-          const fd = new FormData();
-          fd.append('key', IMGBB_KEY);
-          fd.append('image', photoBase64);
-          const res  = await fetch(IMGBB_URL, { method: 'POST', body: fd });
-          const json = await res.json();
-          if (json.success) imageUrl = json.data.url;
-        } catch { /* skip on failure */ }
+        imageUrl = await uploadPhoto(photoBase64); // null on failure: save without it
       }
 
       const today = localDateStr();
