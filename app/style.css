@@ -918,6 +918,12 @@ body.printing { overflow: hidden; }
 .pr-foot { font-size: 11px; color: #666; margin-top: 4px; }
 .pr-method { margin-top: 22px; padding-top: 8px; border-top: 1px solid #d8dce3; font-size: 10.5px; color: #666; }
 .pr-scroll { overflow-x: auto; }
+/* A week or day inside a bigger report */
+.pr-period { margin-top: 28px; }
+.pr-period-title { font-size: 17px; font-weight: 700; padding: 6px 10px; margin-bottom: 12px; background: #fdf6e3; border-left: 4px solid #e6a817; }
+.pr-period .pr-period { margin-top: 20px; }
+.pr-period .pr-period-title { font-size: 15px; }
+.pr-period h2 { font-size: 13px; }
 @media (max-width: 600px) {
   .pr-page { margin: 0; padding: 18px 16px; box-shadow: none; }
   .pr-head { flex-direction: column; } .pr-gen { text-align: left; }
@@ -932,6 +938,8 @@ body.printing { overflow: hidden; }
   .pr-page { margin: 0; padding: 0; max-width: none; box-shadow: none; }
   .pr-page a { color: inherit; text-decoration: none; }
   .pr-table tr, .pr-tile { break-inside: avoid; }
+  .pr-period-title { break-after: avoid; }
+  .pr-period-week { break-before: page; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 

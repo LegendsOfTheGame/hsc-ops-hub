@@ -1,7 +1,7 @@
 import { select } from '../db.js';
 import { localDateStr, fmtDate } from '../utils.js';
 import { getRole } from '../auth.js';
-import { bagFactor, LITTER_ITEMS, countItems } from './field.js';
+import { bagFactor, LITTER_ITEMS, countItems, itemCount, brandCount } from './field.js';
 import { reportCardHtml, mountReportCard } from './report-pdf.js';
 
 const LB_PER_KG = 2.20462;
@@ -124,8 +124,8 @@ function computeWaste(bags, bins) {
 
   const countedEq = sum(counted, eq);
   const items = LITTER_ITEMS.map(i => {
-    const total = sum(counted, r => parseInt(r.item_counts?.[i.key]) || 0);
-    const byBrand = (i.brands || []).map(b => ({ ...b, total: sum(counted, r => parseInt(r.item_counts?.brands?.[i.key]?.[b.name]) || 0) }));
+    const total = sum(counted, r => itemCount(r.item_counts, i));
+    const byBrand = (i.brands || []).map(b => ({ ...b, total: sum(counted, r => brandCount(r.item_counts, i, b.name)) }));
     return { ...i, total, byBrand, perBag: countedEq ? total / countedEq : 0, est: countedEq ? total / countedEq * bagsEq : 0 };
   });
 
@@ -272,8 +272,8 @@ async function exportWasteCsv(root) {
       isBag ? r.bag_color : '', isBag ? bagFactor(r.bag_color) : '',
       kg ?? '', kg ? +(kg * LB_PER_KG).toFixed(1) : '', r.bag_minutes ?? '',
       ...LITTER_ITEMS.flatMap(i => [
-        isBag && r.item_counts ? (r.item_counts[i.key] ?? 0) : '',
-        ...(i.brands || []).map(b => isBag && r.item_counts?.brands?.[i.key] ? (r.item_counts.brands[i.key][b.name] ?? 0) : ''),
+        isBag && r.item_counts ? itemCount(r.item_counts, i) : '',
+        ...(i.brands || []).map(b => isBag && r.item_counts ? brandCount(r.item_counts, i, b.name) : ''),
       ]),
       r.fill_level || '', r.container_type || '', r.location || '', r.image_url || '', r.notes || '',
     ].map(v => JSON.stringify(v ?? '')).join(',');

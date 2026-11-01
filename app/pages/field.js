@@ -27,9 +27,12 @@ export const BRANDS = [
   { name: 'Other',       short: 'Other' },
 ];
 
+// `merges` lists old keys folded into an item. Coffee cups and fast food were
+// two items until Nov 2026 (Amanda asked for one). Bags saved before that keep
+// their old keys in Supabase; itemCount()/brandCount() add them in, so no data
+// migration is needed.
 export const LITTER_ITEMS = [
-  { key: 'coffee_cups',    label: 'Coffee cups',    icon: '☕', brands: BRANDS },
-  { key: 'food_packaging', label: 'Fast food',      icon: '🍔', brands: BRANDS },
+  { key: 'fast_food',      label: 'Coffee & fast food', icon: '🍔', brands: BRANDS, merges: ['coffee_cups', 'food_packaging'] },
   { key: 'drink_cups',     label: 'Drink cups',     icon: '🥤' },
   { key: 'clothing',       label: 'Clothing',       icon: '👕' },
   { key: 'ensure_cans',    label: 'Ensure cans',    icon: '🥫' },
@@ -75,7 +78,7 @@ function getCurrentBag() {
   bag.counts = bag.counts || {};
   bag.brands = bag.brands || {};
   bag.log    = bag.log    || []; // tap history, so −1 removes the right brand
-  return bag;
+  return foldMerged(bag);
 }
 
 function saveCurrentBag(bag) {
@@ -181,8 +184,34 @@ function fmtElapsed(ms) {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
 }
 
+const itemKeys = item => [item.key, ...(item.merges || [])];
+
+export function itemCount(counts, item) {
+  return itemKeys(item).reduce((s, k) => s + (parseInt(counts?.[k]) || 0), 0);
+}
+
+export function brandCount(counts, item, brand) {
+  return itemKeys(item).reduce((s, k) => s + (parseInt(counts?.brands?.[k]?.[brand]) || 0), 0);
+}
+
 export function countItems(counts) {
-  return LITTER_ITEMS.reduce((s, i) => s + (parseInt(counts?.[i.key]) || 0), 0);
+  return LITTER_ITEMS.reduce((s, i) => s + itemCount(counts, i), 0);
+}
+
+// A bag open on the phone when the app updated may still hold old keys
+function foldMerged(bag) {
+  for (const item of LITTER_ITEMS) {
+    for (const old of item.merges || []) {
+      if (bag.counts[old]) bag.counts[item.key] = (bag.counts[item.key] || 0) + bag.counts[old];
+      delete bag.counts[old];
+      for (const [b, n] of Object.entries(bag.brands[old] || {})) {
+        (bag.brands[item.key] ||= {})[b] = (bag.brands[item.key][b] || 0) + n;
+      }
+      delete bag.brands[old];
+      bag.log.forEach(t => { if (t.key === old) t.key = item.key; });
+    }
+  }
+  return bag;
 }
 
 let bagTicker = null;
