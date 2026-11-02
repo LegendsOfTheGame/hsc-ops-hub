@@ -41,7 +41,7 @@ const GUIDE = {
   'Dumped Garbage': {
     who: 'partial',
     hsc: 'Loose litter only. Do not move appliances, tires, construction waste or other bulky items.',
-    rule: 'By-law 10-118 s.4(1) and s.4(1.1): waste on a yard or boulevard is the owner\'s responsibility. s.6: no person may put waste on another property, or on City property, without written permission. By-law 20-221 s.5.2–5.3: garbage goes out after 7:00 p.m. the day before collection, and containers come in by 7:00 p.m. on collection day. 20-221 has no set penalty; it is enforced through the courts.',
+    rule: 'By-law 10-118 s.4(1) and s.4(1.1): waste on a yard or boulevard is the owner\'s responsibility. s.6: no person may put waste on another property, or on City property, without written permission. By-law 20-221 s.5.2–5.3: garbage goes out between 7:00 p.m. the day before collection and 7:00 a.m. on collection day, and containers come in by 7:00 p.m. on collection day. 20-221 has no set penalty; it is enforced through the courts.',
     report: 'Bulky items: log it and file it with the City.',
   },
   'Illegal Dumping': {
