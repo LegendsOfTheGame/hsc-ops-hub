@@ -1,5 +1,6 @@
 import { select, insert, update, remove } from '../db.js';
 import { showToast, openModal, closeModal, initChips, chipValue, setChip, localDateStr, fmtDate, fmtDateTime, diffBadge, statusBadge, navigate } from '../utils.js';
+import { ALECTRA_OWNER, ASSET_RE, describeSpot, alectraMailto } from '../alectra.js';
 
 const SURFACE_TYPES = ['Brick','Metal','Glass','Plastic','Concrete','Wood','Other'];
 const GRAFFITI_TYPES = ['Tag','Throw-up','Piece','Stencil','Offensive/Slurs','Other'];
@@ -22,6 +23,7 @@ export async function renderGraffiti(root) {
       <div class="toolbar-spacer"></div>
       <button class="btn btn-primary" id="gl-add">+ Add Entry</button>
     </div>
+    <div id="gl-alectra"></div>
     <div id="gl-table-wrap"><div class="loading">Loading…</div></div>
   `;
 
@@ -31,8 +33,85 @@ export async function renderGraffiti(root) {
   root.querySelector('#gl-search').addEventListener('input', filterChange);
   root.querySelector('#gl-status-filter').addEventListener('change', filterChange);
 
-  await loadEntries(root);
+  await Promise.all([loadEntries(root), loadAlectra(root)]);
 }
+
+// ── Alectra to report ────────────────────────────────────────────────────────
+// Spots logged in the field as Alectra, not yet emailed. The place line is a
+// draft from GPS: check it (and the side of the street) before you send.
+async function loadAlectra(root) {
+  const wrap = root.querySelector('#gl-alectra');
+  if (!wrap) return;
+  const { data } = await select('field_logs', { filter: { type: 'graffiti', owner: ALECTRA_OWNER }, order: 'logged_at', ascending: true });
+  const open = (data || []).filter(r => !r.reported_at);
+  if (!open.length) { wrap.innerHTML = ''; return; }
+
+  const places = await Promise.all(open.map(r => describeSpot(r.location)));
+  // Haven emails Alectra from the PC, never the phone (3 Nov 2026)
+  const onPC = window.matchMedia('(pointer: fine)').matches;
+  wrap.innerHTML = `
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-weight:700;margin-bottom:4px">⚡ Alectra to report (${open.length})</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">${onPC
+        ? 'Check the location line, then Email Alectra. The email opens in your mail app; nothing sends until you send it there.'
+        : 'You can fix the number here. Check the location and send the email from your PC.'}</div>
+      ${open.map((r, i) => {
+        const photos = r.image_urls || (r.image_url ? [r.image_url] : []);
+        return `
+        <div class="al-spot" data-id="${r.id}" style="border-top:1px solid var(--border);padding:10px 0">
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">${fmtDateTime(r.logged_at)} · GPS ${esc(r.location || 'none')}${photos.length === 1 ? ' · <span style="color:var(--warning)">1 photo (Alectra prefers 2)</span>' : ''}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            ${photos.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" style="width:64px;height:64px;object-fit:cover;border-radius:4px;border:1px solid var(--border)"></a>`).join('')}
+          </div>
+          <div class="form-row">
+            <div class="form-group" style="flex:0 0 140px">
+              <label>Number</label>
+              <input type="text" class="al-asset" value="${esc(r.asset_number || '')}" placeholder="e.g. P12229" autocapitalize="characters">
+            </div>
+            <div class="form-group">
+              <label>Location</label>
+              <textarea class="al-place" rows="2" placeholder="Barton St E, … side, at …">${esc(places[i] || '')}</textarea>
+            </div>
+          </div>
+          ${onPC ? `
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm al-email">Email Alectra</button>
+            <button class="btn btn-secondary btn-sm al-done">Mark reported</button>
+          </div>` : `
+          <div style="font-size:12px;color:var(--text-muted)">Email it from your PC. The 5:30 p.m. check puts it on The Barton Line.</div>`}
+        </div>`;
+      }).join('')}
+    </div>`;
+
+  wrap.querySelectorAll('.al-spot').forEach(el => {
+    const r = open.find(x => String(x.id) === el.dataset.id);
+    const asset = el.querySelector('.al-asset');
+    asset.addEventListener('change', async () => {
+      asset.value = asset.value.toUpperCase().replace(/\s+/g, '');
+      if (asset.value && !ASSET_RE.test(asset.value)) showToast('Not the usual format (1 letter + 5–7 digits) — saved anyway');
+      const { error } = await update('field_logs', { id: r.id }, { asset_number: asset.value || null }, { stamp: false });
+      showToast(error ? 'Number not saved — check connection' : '✓ Number saved', error ? 'error' : undefined);
+    });
+    if (!onPC) return;
+    el.querySelector('.al-email').addEventListener('click', () => {
+      window.location.href = alectraMailto({
+        asset: asset.value,
+        place: el.querySelector('.al-place').value.trim(),
+        gps: r.location,
+        seen: fmtDateTime(r.logged_at),
+        photos: r.image_urls || (r.image_url ? [r.image_url] : []),
+      });
+    });
+    el.querySelector('.al-done').addEventListener('click', async () => {
+      const { error } = await update('field_logs', { id: r.id }, { reported_at: new Date().toISOString() }, { stamp: false });
+      if (error) { showToast('Not saved — check connection', 'error'); return; }
+      showToast('✓ Marked reported to Alectra');
+      loadAlectra(root);
+    });
+  });
+}
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 
 async function loadEntries(root) {
   const { data } = await select('graffiti_log', { order: 'timestamp', ascending: false });

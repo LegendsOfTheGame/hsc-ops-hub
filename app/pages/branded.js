@@ -8,6 +8,7 @@
 import { select, insert } from '../db.js';
 import { getFreshToken } from '../auth.js';
 import { UPLOAD_WORKER_URL } from '../config.js';
+import { readPhotoMeta } from '../utils.js';
 
 const W = 1080, H = 1440;
 const M = 56;                       // side margin, same as the workers
@@ -379,63 +380,7 @@ function render(canvas, s, assets) {
 }
 
 // ── Photo metadata ────────────────────────────────────────────────────────────
-// Reads GPS and time taken from a JPEG's EXIF block, so we can see what the
-// phone actually hands the page (iOS can drop location on web uploads).
-
-async function readPhotoMeta(file) {
-  const buf = await file.slice(0, 256 * 1024).arrayBuffer();
-  const v = new DataView(buf);
-  if (v.byteLength < 4 || v.getUint16(0) !== 0xFFD8) return { readable: false };
-  let off = 2;
-  while (off + 4 < v.byteLength) {
-    const marker = v.getUint16(off), len = v.getUint16(off + 2);
-    if (marker === 0xFFE1 && v.getUint32(off + 4) === 0x45786966) return parseExif(v, off + 10);
-    if ((marker & 0xFF00) !== 0xFF00 || marker === 0xFFDA) break;
-    off += 2 + len;
-  }
-  return { readable: true, gps: null, taken: null };
-}
-
-function parseExif(v, tiff) {
-  const le = v.getUint16(tiff) === 0x4949;
-  const u16 = o => v.getUint16(tiff + o, le);
-  const u32 = o => v.getUint32(tiff + o, le);
-  const entries = ifd => {
-    const out = {};
-    if (!ifd || tiff + ifd + 2 > v.byteLength) return out;
-    const n = u16(ifd);
-    for (let i = 0; i < n; i++) {
-      const e = ifd + 2 + i * 12;
-      if (tiff + e + 12 > v.byteLength) break;
-      out[u16(e)] = { type: u16(e + 2), count: u32(e + 4), at: e + 8 };
-    }
-    return out;
-  };
-  const ascii = t => {
-    if (!t) return null;
-    const o = t.count > 4 ? u32(t.at) : t.at;
-    let str = '';
-    for (let i = 0; i < t.count - 1 && tiff + o + i < v.byteLength; i++) str += String.fromCharCode(v.getUint8(tiff + o + i));
-    return str;
-  };
-  const dms = t => {
-    if (!t) return null;
-    const o = u32(t.at), r = i => u32(o + i * 8) / (u32(o + i * 8 + 4) || 1);
-    return r(0) + r(1) / 60 + r(2) / 3600;
-  };
-  const ifd0 = entries(u32(4));
-  const exif = ifd0[0x8769] ? entries(u32(ifd0[0x8769].at)) : {};
-  const g = ifd0[0x8825] ? entries(u32(ifd0[0x8825].at)) : {};
-  let gps = null;
-  const lat = dms(g[2]), lon = dms(g[4]);
-  if (lat != null && lon != null) {
-    gps = {
-      lat: ascii(g[1]) === 'S' ? -lat : lat,
-      lon: ascii(g[3]) === 'W' ? -lon : lon,
-    };
-  }
-  return { readable: true, gps, taken: ascii(exif[0x9003]) };
-}
+// readPhotoMeta (utils.js) reads GPS and time taken from the JPEG's EXIF.
 
 function metaText(m) {
   if (!m.readable) return 'Metadata: this file type cannot be read here (not a JPEG).';

@@ -1,9 +1,17 @@
 import { select, insert, update } from '../db.js';
-import { showToast, openModal, closeModal, getGPS, coordsStr, initChips, chipValue, localDateStr, fmtDateTime, shrinkPhoto } from '../utils.js';
+import { showToast, openModal, closeModal, getGPS, coordsStr, initChips, chipValue, localDateStr, fmtDateTime, shrinkPhoto, readPhotoMeta } from '../utils.js';
 import { uploadPhoto } from '../photos.js';
+import { ALECTRA_OWNER, ASSET_RE } from '../alectra.js';
 
 const SURFACES   = ['Brick','Metal','Glass','Plastic','Concrete','Wood','Other'];
 const SEVERITIES = ['Minor','Moderate','Major'];
+// Field graffiti owner; values match graffiti_log.owner (OWNER_TYPES in pages/graffiti.js)
+const G_OWNERS = [
+  { label: 'Not sure', value: 'Unknown' },
+  { label: 'Alectra',  value: ALECTRA_OWNER },
+  { label: 'City',     value: 'City of Hamilton' },
+];
+const G_MAX_PHOTOS = 4;
 
 // Bag colors → orange-equivalent factor for reporting (reporting is based on Orange, 31x24).
 // Factor = bag area ÷ orange area. Orange is being phased out by end of Q3 2026;
@@ -860,6 +868,17 @@ async function openGraffitiModal(root) {
         </div>
       </div>
       <div class="form-group">
+        <label>Owner</label>
+        <div class="chip-group" id="g-owner">
+          ${G_OWNERS.map(o => `<button class="chip" data-value="${o.value}">${o.label}</button>`).join('')}
+        </div>
+      </div>
+      <div class="form-group" id="g-alectra" hidden>
+        <label>Pole / transformer number</label>
+        <input type="text" id="g-asset" placeholder="e.g. P12229" autocapitalize="characters" autocomplete="off">
+        <div class="gps-hint" id="g-asset-hint">1 letter and 5 to 7 digits, on the tag on the box or pole.</div>
+      </div>
+      <div class="form-group">
         <label>Surface</label>
         <div class="chip-group" id="g-surface">
           ${SURFACES.map(s => `<button class="chip" data-value="${s}">${s}</button>`).join('')}
@@ -876,16 +895,13 @@ async function openGraffitiModal(root) {
         <input type="text" id="g-notes" placeholder="e.g. red spray paint, side wall">
       </div>
       <div class="form-group">
-        <label>Photo <span style="font-weight:400;font-size:11px">(optional)</span></label>
-        <div id="g-photo-area" style="display:flex;align-items:center;gap:10px;margin-top:4px">
-          <label for="g-photo-input" class="btn btn-secondary btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px">
+        <label>Photos <span id="g-photo-need" style="font-weight:400;font-size:11px">(optional, up to ${G_MAX_PHOTOS})</span></label>
+        <div id="g-photo-area" style="display:flex;align-items:center;gap:10px;margin-top:4px;flex-wrap:wrap">
+          <label for="g-photo-input" id="g-photo-add" class="btn btn-secondary btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px">
             📷 Add Photo
           </label>
           <input type="file" id="g-photo-input" accept="image/*" capture="environment" style="display:none">
-          <div id="g-photo-preview" hidden style="position:relative;width:64px;height:64px;flex-shrink:0">
-            <img id="g-photo-img" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
-            <button id="g-photo-remove" style="position:absolute;top:-6px;right:-6px;background:var(--danger);border:none;color:#fff;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;padding:0">✕</button>
-          </div>
+          <div id="g-photo-thumbs" style="display:flex;gap:10px"></div>
         </div>
       </div>
       <div class="btn-group">
@@ -899,32 +915,69 @@ async function openGraffitiModal(root) {
     box.querySelector('#g-cancel').addEventListener('click', closeModal);
     initChips(box.querySelector('#g-surface'));
     initChips(box.querySelector('#g-severity'));
-    autoGPS(box, '#g-location', '#g-gps', '#g-gps-hint');
+    let gpsFromPhoto = false; // the photo's GPS is where the graffiti is
+    const locInput = box.querySelector('#g-location');
+    locInput.addEventListener('input', () => { gpsFromPhoto = false; });
+    box.querySelector('#g-gps').addEventListener('click', () => { gpsFromPhoto = false; });
+    autoGPS(box, '#g-location', '#g-gps', '#g-gps-hint', () => gpsFromPhoto);
 
-    // Photo
-    let photoBase64 = null;
-    const photoInput   = box.querySelector('#g-photo-input');
-    const photoPreview = box.querySelector('#g-photo-preview');
-    const photoImg     = box.querySelector('#g-photo-img');
-
-    photoInput.addEventListener('change', () => {
-      const file = photoInput.files[0];
-      if (!file) return;
-      if (file.size > 10 * 1024 * 1024) { showToast('Photo too large — max 10 MB'); photoInput.value = ''; return; }
-      const reader = new FileReader();
-      reader.onload = e => {
-        photoBase64 = e.target.result.split(',')[1];
-        photoImg.src = e.target.result;
-        photoPreview.hidden = false;
-      };
-      reader.readAsDataURL(file);
+    // Owner: Alectra shows the number field and makes a photo required
+    const ownerGroup = box.querySelector('#g-owner');
+    initChips(ownerGroup);
+    const isAlectra = () => chipValue(ownerGroup) === ALECTRA_OWNER;
+    const photoNeed = () => isAlectra()
+      ? `(required: Alectra prefers 2, 1 is accepted; up to ${G_MAX_PHOTOS})`
+      : `(optional, up to ${G_MAX_PHOTOS})`;
+    ownerGroup.addEventListener('click', () => {
+      box.querySelector('#g-alectra').hidden = !isAlectra();
+      box.querySelector('#g-photo-need').textContent = photoNeed();
+    });
+    const assetInput = box.querySelector('#g-asset');
+    const assetHint  = box.querySelector('#g-asset-hint');
+    assetInput.addEventListener('input', () => {
+      assetInput.value = assetInput.value.toUpperCase().replace(/\s+/g, '');
+      const v = assetInput.value;
+      assetHint.style.color = v && !ASSET_RE.test(v) ? 'var(--warning)' : '';
+      assetHint.textContent = v && !ASSET_RE.test(v)
+        ? 'Not the usual format (1 letter + 5–7 digits). Check it; it still saves.'
+        : '1 letter and 5 to 7 digits, on the tag on the box or pole.';
     });
 
-    box.querySelector('#g-photo-remove').addEventListener('click', () => {
-      photoBase64 = null;
+    // Photos: shrunk to ≤1600px JPEG, like bag photos
+    const photos = []; // base64 JPEGs, in the order taken
+    const photoInput = box.querySelector('#g-photo-input');
+    const thumbs     = box.querySelector('#g-photo-thumbs');
+    const drawThumbs = () => {
+      thumbs.innerHTML = photos.map((b64, i) => `
+        <div style="position:relative;width:64px;height:64px;flex-shrink:0">
+          <img src="data:image/jpeg;base64,${b64}" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+          <button data-i="${i}" style="position:absolute;top:-6px;right:-6px;background:var(--danger);border:none;color:#fff;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;padding:0">✕</button>
+        </div>`).join('');
+      box.querySelector('#g-photo-add').style.display = photos.length >= G_MAX_PHOTOS ? 'none' : '';
+    };
+    thumbs.addEventListener('click', e => {
+      const btn = e.target.closest('button[data-i]');
+      if (!btn) return;
+      photos.splice(Number(btn.dataset.i), 1);
+      drawThumbs();
+    });
+    photoInput.addEventListener('change', async () => {
+      const file = photoInput.files[0];
       photoInput.value = '';
-      photoImg.src = '';
-      photoPreview.hidden = true;
+      if (!file || photos.length >= G_MAX_PHOTOS) return;
+      try {
+        // EXIF first: the shrunk copy has none
+        const meta = await readPhotoMeta(file).catch(() => ({}));
+        photos.push((await shrinkPhoto(file)).split(',')[1]);
+        drawThumbs();
+        if (meta.gps && !gpsFromPhoto) {
+          locInput.value = coordsStr({ lat: meta.gps.lat, lng: meta.gps.lon });
+          gpsFromPhoto = true;
+          box.querySelector('#g-gps-hint').textContent = 'From the photo’s GPS';
+        } else if (!meta.gps && photos.length === 1) {
+          box.querySelector('#g-gps-hint').textContent += ' · Photo has no GPS (iOS can drop it) — using the phone’s';
+        }
+      } catch { showToast('Could not read that photo — try again', 'error'); }
     });
 
     // Property autocomplete
@@ -967,13 +1020,23 @@ async function openGraffitiModal(root) {
 
     box.querySelector('#g-submit').addEventListener('click', async () => {
       const submitBtn = box.querySelector('#g-submit');
+      const alectra = isAlectra();
+      if (alectra && !photos.length) { showToast('Alectra needs a photo — 2 if you can', 'error'); return; }
       submitBtn.disabled = true;
 
-      let imageUrl = null;
-      if (photoBase64) {
-        submitBtn.textContent = 'Uploading…';
-        imageUrl = await uploadPhoto(photoBase64); // null on failure: save without it
+      const imageUrls = [];
+      for (let i = 0; i < photos.length; i++) {
+        submitBtn.textContent = `Uploading ${i + 1}/${photos.length}…`;
+        const url = await uploadPhoto(photos[i]);
+        if (url) imageUrls.push(url);
+        else if (alectra) { // the report is no use to Alectra without its photos
+          showToast('Photo upload failed — check signal and tap Log again', 'error');
+          submitBtn.disabled = false; submitBtn.textContent = 'Log Graffiti';
+          return;
+        } // otherwise save without that photo, as before
       }
+      const imageUrl = imageUrls[0] || null;
+      const owner = chipValue(ownerGroup) || 'Unknown';
 
       const today = localDateStr();
       const row = {
@@ -987,15 +1050,13 @@ async function openGraffitiModal(root) {
         severity: chipValue(box.querySelector('#g-severity')),
         notes: box.querySelector('#g-notes').value.trim() || null,
         image_url: imageUrl,
+        image_urls: imageUrls.length ? imageUrls : null,
+        owner,
+        asset_number: alectra ? (assetInput.value || null) : null,
         status: 'Pending',
       };
-      let { error } = await insert('field_logs', row);
-      if (error) {
-        // Retry without image_url in case the column doesn't exist yet
-        const { error: err2 } = await insert('field_logs', { ...row, image_url: undefined });
-        error = err2;
-      }
-      if (error) { showToast('Failed to save — check connection', 4000); submitBtn.disabled = false; return; }
+      const { error } = await insert('field_logs', row);
+      if (error) { showToast('Failed to save — check connection', 4000); submitBtn.disabled = false; submitBtn.textContent = 'Log Graffiti'; return; }
 
       // Also write to graffiti_log for management tracking
       await insert('graffiti_log', {
@@ -1004,7 +1065,8 @@ async function openGraffitiModal(root) {
         gps:          row.location || null,
         status:       'Pending',
         surface_type: row.surface_type || null,
-        notes:        row.notes || null,
+        owner,
+        notes:        [row.asset_number, row.notes].filter(Boolean).join(' · ') || null,
         image_link:   imageUrl || null,
       });
 
@@ -1173,16 +1235,19 @@ async function loadCitizenReports(root) {
 
 // ── Auto-GPS helper ───────────────────────────────────────────────────────────
 
-async function autoGPS(box, inputSel, btnSel, hintSel) {
+// keep(): true when the field already holds a better fix (graffiti: the photo's
+// own GPS) that the automatic fix on open must not overwrite. 📍 always does.
+async function autoGPS(box, inputSel, btnSel, hintSel, keep = () => false) {
   const input = box.querySelector(inputSel);
   const btn   = box.querySelector(btnSel);
   const hint  = box.querySelector(hintSel);
 
-  async function doGPS() {
+  async function doGPS(auto) {
     btn.textContent = '⏳';
     btn.disabled = true;
     try {
       const c = await getGPS();
+      if (auto && keep()) { btn.textContent = '📍'; btn.disabled = false; return; }
       input.value = coordsStr(c);
       if (hint) hint.textContent = `±${c.acc}m accuracy`;
       btn.textContent = '✓';
@@ -1193,6 +1258,6 @@ async function autoGPS(box, inputSel, btnSel, hintSel) {
     btn.disabled = false;
   }
 
-  btn.addEventListener('click', doGPS);
-  doGPS(); // auto on open
+  btn.addEventListener('click', () => doGPS(false));
+  doGPS(true); // auto on open
 }

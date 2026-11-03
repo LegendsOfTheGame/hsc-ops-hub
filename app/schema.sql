@@ -388,6 +388,13 @@ create table if not exists branded_posts (
 
 alter table branded_posts add column if not exists short_url text;
 
+-- Migration 2026-11-03 — Alectra graffiti reports (v2.24.0). Applied by Haven's
+-- approval as field_logs_alectra_reports. Safe to re-run.
+alter table field_logs add column if not exists owner        text;        -- graffiti: same values as graffiti_log.owner
+alter table field_logs add column if not exists asset_number text;        -- Alectra pole / transformer number, e.g. P12229
+alter table field_logs add column if not exists image_urls   jsonb;       -- graffiti: up to 4 photo URLs (image_url = the first)
+alter table field_logs add column if not exists reported_at  timestamptz; -- when it was emailed to Alectra
+
 alter table branded_posts enable row level security;
 do $$ begin
   create policy "Authenticated users only" on branded_posts

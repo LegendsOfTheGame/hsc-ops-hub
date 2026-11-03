@@ -63,8 +63,8 @@ export async function insert(table, row) {
   }
 }
 
-// UPDATE rows matching filter
-export async function update(table, filter, changes) {
+// UPDATE rows matching filter. stamp: false for tables with no updated_at (field_logs).
+export async function update(table, filter, changes, { stamp = true } = {}) {
   if (!configured()) return localUpdate(table, filter, changes);
 
   let url = `${SUPABASE_URL}/rest/v1/${table}?`;
@@ -76,7 +76,7 @@ export async function update(table, filter, changes) {
     const res = await request(url, {
       method: 'PATCH',
       extraHeaders: { 'Prefer': 'return=representation' },
-      body: JSON.stringify({ ...changes, updated_at: new Date().toISOString() }),
+      body: JSON.stringify(stamp ? { ...changes, updated_at: new Date().toISOString() } : changes),
     });
     const data = await res.json();
     return res.ok ? { data, error: null } : { data: null, error: data };
