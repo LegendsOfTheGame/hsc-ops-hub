@@ -919,7 +919,11 @@ async function openGraffitiModal(root) {
     const locInput = box.querySelector('#g-location');
     locInput.addEventListener('input', () => { gpsFromPhoto = false; });
     box.querySelector('#g-gps').addEventListener('click', () => { gpsFromPhoto = false; });
-    autoGPS(box, '#g-location', '#g-gps', '#g-gps-hint', () => gpsFromPhoto);
+    // Both sources are saved: location is the one used, device_location and
+    // photo_location keep the phone's fix and each photo's own GPS.
+    let deviceFix = null;
+    autoGPS(box, '#g-location', '#g-gps', '#g-gps-hint', () => gpsFromPhoto,
+      c => { deviceFix = `${coordsStr(c)} (±${c.acc} m)`; });
 
     // Owner: Alectra shows the number field and makes a photo required
     const ownerGroup = box.querySelector('#g-owner');
@@ -944,7 +948,8 @@ async function openGraffitiModal(root) {
     });
 
     // Photos: shrunk to ≤1600px JPEG, like bag photos
-    const photos = []; // base64 JPEGs, in the order taken
+    const photos = [];    // base64 JPEGs, in the order taken
+    const photoGPS = [];  // same order: { lat, lng, taken } from EXIF, or null
     const photoInput = box.querySelector('#g-photo-input');
     const thumbs     = box.querySelector('#g-photo-thumbs');
     const drawThumbs = () => {
@@ -959,6 +964,7 @@ async function openGraffitiModal(root) {
       const btn = e.target.closest('button[data-i]');
       if (!btn) return;
       photos.splice(Number(btn.dataset.i), 1);
+      photoGPS.splice(Number(btn.dataset.i), 1);
       drawThumbs();
     });
     photoInput.addEventListener('change', async () => {
@@ -969,6 +975,7 @@ async function openGraffitiModal(root) {
         // EXIF first: the shrunk copy has none
         const meta = await readPhotoMeta(file).catch(() => ({}));
         photos.push((await shrinkPhoto(file)).split(',')[1]);
+        photoGPS.push(meta.gps ? { lat: meta.gps.lat, lng: meta.gps.lon, taken: meta.taken || null } : null);
         drawThumbs();
         if (meta.gps && !gpsFromPhoto) {
           locInput.value = coordsStr({ lat: meta.gps.lat, lng: meta.gps.lon });
@@ -1024,11 +1031,11 @@ async function openGraffitiModal(root) {
       if (alectra && !photos.length) { showToast('Alectra needs a photo — 2 if you can', 'error'); return; }
       submitBtn.disabled = true;
 
-      const imageUrls = [];
+      const imageUrls = [], savedGPS = []; // savedGPS[i] belongs to imageUrls[i]
       for (let i = 0; i < photos.length; i++) {
         submitBtn.textContent = `Uploading ${i + 1}/${photos.length}…`;
         const url = await uploadPhoto(photos[i]);
-        if (url) imageUrls.push(url);
+        if (url) { imageUrls.push(url); savedGPS.push(photoGPS[i]); }
         else if (alectra) { // the report is no use to Alectra without its photos
           showToast('Photo upload failed — check signal and tap Log again', 'error');
           submitBtn.disabled = false; submitBtn.textContent = 'Log Graffiti';
@@ -1051,6 +1058,8 @@ async function openGraffitiModal(root) {
         notes: box.querySelector('#g-notes').value.trim() || null,
         image_url: imageUrl,
         image_urls: imageUrls.length ? imageUrls : null,
+        device_location: deviceFix,
+        photo_location: savedGPS.some(Boolean) ? savedGPS : null,
         owner,
         asset_number: alectra ? (assetInput.value || null) : null,
         status: 'Pending',
@@ -1237,7 +1246,8 @@ async function loadCitizenReports(root) {
 
 // keep(): true when the field already holds a better fix (graffiti: the photo's
 // own GPS) that the automatic fix on open must not overwrite. 📍 always does.
-async function autoGPS(box, inputSel, btnSel, hintSel, keep = () => false) {
+// onFix(c): every phone fix, kept even when it does not go in the field.
+async function autoGPS(box, inputSel, btnSel, hintSel, keep = () => false, onFix = () => {}) {
   const input = box.querySelector(inputSel);
   const btn   = box.querySelector(btnSel);
   const hint  = box.querySelector(hintSel);
@@ -1247,6 +1257,7 @@ async function autoGPS(box, inputSel, btnSel, hintSel, keep = () => false) {
     btn.disabled = true;
     try {
       const c = await getGPS();
+      onFix(c);
       if (auto && keep()) { btn.textContent = '📍'; btn.disabled = false; return; }
       input.value = coordsStr(c);
       if (hint) hint.textContent = `±${c.acc}m accuracy`;

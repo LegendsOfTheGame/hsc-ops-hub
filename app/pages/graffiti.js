@@ -1,6 +1,6 @@
 import { select, insert, update, remove } from '../db.js';
 import { showToast, openModal, closeModal, initChips, chipValue, setChip, localDateStr, fmtDate, fmtDateTime, diffBadge, statusBadge, navigate } from '../utils.js';
-import { ALECTRA_OWNER, ASSET_RE, describeSpot, alectraMailto } from '../alectra.js';
+import { ALECTRA_OWNER, ASSET_RE, describeSpot, alectraMailto, gpsSources } from '../alectra.js';
 
 const SURFACE_TYPES = ['Brick','Metal','Glass','Plastic','Concrete','Wood','Other'];
 const GRAFFITI_TYPES = ['Tag','Throw-up','Piece','Stencil','Offensive/Slurs','Other'];
@@ -59,7 +59,8 @@ async function loadAlectra(root) {
         const photos = r.image_urls || (r.image_url ? [r.image_url] : []);
         return `
         <div class="al-spot" data-id="${r.id}" style="border-top:1px solid var(--border);padding:10px 0">
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">${fmtDateTime(r.logged_at)} · GPS ${esc(r.location || 'none')}${photos.length === 1 ? ' · <span style="color:var(--warning)">1 photo (Alectra prefers 2)</span>' : ''}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:2px">${fmtDateTime(r.logged_at)} · GPS ${esc(r.location || 'none')}${photos.length === 1 ? ' · <span style="color:var(--warning)">1 photo (Alectra prefers 2)</span>' : ''}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">${esc(gpsSources(r))}</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
             ${photos.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" style="width:64px;height:64px;object-fit:cover;border-radius:4px;border:1px solid var(--border)"></a>`).join('')}
           </div>

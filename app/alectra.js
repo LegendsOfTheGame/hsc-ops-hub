@@ -101,6 +101,16 @@ export async function nearestAddress(lat, lng) {
   return { label, m: Math.round(best.d) };
 }
 
+// "Phone 43.26141, -79.85498 (±12 m) · Photo 43.26139, -79.85502 · 4 m apart"
+export function gpsSources(r) {
+  const phone = r.device_location, phoneAt = parseGPS(phone);
+  const photo = (r.photo_location || []).find(Boolean);
+  const parts = [`Phone ${phone || 'no fix'}`];
+  parts.push(photo ? `Photo ${photo.lat.toFixed(5)}, ${photo.lng.toFixed(5)}` : 'Photo no GPS');
+  if (phoneAt && photo) parts.push(`${Math.round(metres(phoneAt.lat, phoneAt.lng, photo.lat, photo.lng))} m apart`);
+  return parts.join(' · ');
+}
+
 export async function describeSpot(gps) {
   const p = parseGPS(gps);
   if (!p) return '';

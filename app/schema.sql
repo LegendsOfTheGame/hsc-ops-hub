@@ -395,6 +395,12 @@ alter table field_logs add column if not exists asset_number text;        -- Ale
 alter table field_logs add column if not exists image_urls   jsonb;       -- graffiti: up to 4 photo URLs (image_url = the first)
 alter table field_logs add column if not exists reported_at  timestamptz; -- when it was emailed to Alectra
 
+-- Migration 2026-11-03 — keep both GPS sources on field graffiti (v2.24.1).
+-- Applied by Haven's approval as field_logs_both_locations. location stays the
+-- one used (photo GPS when there is one).
+alter table field_logs add column if not exists device_location text;  -- phone fix, '43.26139, -79.85502 (±9 m)'
+alter table field_logs add column if not exists photo_location  jsonb; -- per photo, same order as image_urls: { lat, lng, taken } or null
+
 alter table branded_posts enable row level security;
 do $$ begin
   create policy "Authenticated users only" on branded_posts
