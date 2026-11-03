@@ -126,6 +126,9 @@ function openEntryModal(entry, root) {
           <select id="e-owner">
             ${OWNER_TYPES.map(o => `<option value="${o}" ${entry?.owner === o ? 'selected' : ''}>${o}</option>`).join('')}
           </select>
+          <div id="e-alectra" style="font-size:12px;color:var(--text-muted);margin-top:4px;${entry?.owner === 'Utility (Alectra)' ? '' : 'display:none'}">
+            Email Customer.Solutions@alectrautilities.com with the address and transformer number (e.g. P12229). Ops line: 416-814-9301.
+          </div>
         </div>
         <div class="form-group">
           <label>Surface Type</label>
@@ -179,6 +182,9 @@ function openEntryModal(entry, root) {
 
   openModal(html, box => {
     box.querySelector('#e-cancel').addEventListener('click', closeModal);
+    box.querySelector('#e-owner').addEventListener('change', e => {
+      box.querySelector('#e-alectra').style.display = e.target.value === 'Utility (Alectra)' ? '' : 'none';
+    });
 
     box.querySelector('#e-save').addEventListener('click', async () => {
       const dateVal = box.querySelector('#e-date').value;

@@ -37,6 +37,8 @@ const GUIDE = {
     rule: 'By-law 10-118 s.5: the owner or occupant must clean graffiti from buildings, structures, fences, retaining walls, paved surfaces, vehicles, trailers and waste containers on their property.',
     note: 'Commercial District Revitalization Grant: the City can pay 50% of the invoice, to a maximum of $200 for each incident, for a maximum of 5 incidents each year. It does not make removal free.',
     report: 'Graffiti on City property (bus shelter, street light, park) is the City\'s. Log it and file it. For private property, after a report the City inspects within 5 days and gives a notice to clean. The owner then has 13 days. If the owner does not clean it, the City cleans it within 9 days and bills the owner, also if the owner cleans it late. Phone: 905-546-CITY (905-546-2489).',
+    // From Jennifer, senior Operations Manager at Alectra, Nov 2026.
+    utility: 'Alectra (hydro poles, transformer boxes): email Customer.Solutions@alectrautilities.com with the address and the transformer number. The number is on the transformer: 1 letter and 5 to 7 digits, for example P12229. Alectra reports it to its graffiti team. The Hamilton graffiti team stops for the winter. From April 1 to October 1, Alectra tries to remove graffiti within 4 business days. Alectra operations team direct line: 416-814-9301.',
   },
   'Dumped Garbage': {
     who: 'partial',
@@ -120,7 +122,8 @@ function guideBody(cat) {
     ${row('The rule:', g.rule)}
     ${row('Note:', g.note)}
     ${finesTable(cat)}
-    ${row('To report:', g.report)}`;
+    ${row('To report:', g.report)}
+    ${row('Alectra:', g.utility)}`;
 }
 
 function finesTable(cat) {
