@@ -4,6 +4,9 @@ import { getRole } from '../auth.js';
 
 let allItems = [];
 
+// inventory_log has no type column: qty_change is positive for a purchase, negative for usage.
+const isPurchase = r => parseFloat(r.qty_change) > 0;
+
 export async function renderInventory(root) {
   root.innerHTML = `
     <div class="page-title">Inventory</div>
@@ -104,7 +107,7 @@ async function openHistoryModal(item) {
     </div>`;
 
   openModal(html, async box => {
-    const { data } = await select('inventory_log', { filter: { item_id: item.id }, order: 'logged_at', ascending: true });
+    const { data } = await select('inventory_log', { filter: { item_id: item.id }, order: 'created_at', ascending: true });
     const rows = data || [];
     const histEl = box.querySelector('#hist-table');
 
@@ -116,9 +119,9 @@ async function openHistoryModal(item) {
     // Compute running AVCO per row
     let runQty = 0, runAvco = 0;
     const annotated = rows.map(r => {
-      const rQty  = Math.abs(parseFloat(r.quantity) || 0);
+      const rQty  = Math.abs(parseFloat(r.qty_change) || 0);
       const rCost = parseFloat(r.cost_per_unit) || 0;
-      if (r.change_type === 'purchase') {
+      if (isPurchase(r)) {
         const newTotal = runQty + rQty;
         runAvco = newTotal > 0 ? (runQty * runAvco + rQty * rCost) / newTotal : rCost;
         runQty  = newTotal;
@@ -131,24 +134,24 @@ async function openHistoryModal(item) {
     histEl.innerHTML = `<table class="data-table" style="font-size:13px">
       <thead><tr>
         <th>Date</th><th>Type</th><th>Qty</th>
-        ${rows.some(r => r.change_type === 'purchase') ? '<th>Cost/Unit</th>' : ''}
+        ${rows.some(isPurchase) ? '<th>Cost/Unit</th>' : ''}
         <th>Running Avg</th><th>Notes</th>
       </tr></thead>
       <tbody>
         ${annotated.map(r => {
-          const rQty   = Math.abs(parseFloat(r.quantity) || 0);
+          const rQty   = Math.abs(parseFloat(r.qty_change) || 0);
           const rCost  = parseFloat(r.cost_per_unit) || 0;
-          const isPurch = r.change_type === 'purchase';
-          const dateStr = r.purchased_at ? fmtDate(r.purchased_at) : fmtDate(r.logged_at || r.created_at);
+          const isPurch = isPurchase(r);
+          const dateStr = fmtDate(r.purchased_at || r.date || r.created_at);
           return `<tr>
             <td style="white-space:nowrap">${dateStr}</td>
             <td>${isPurch ? '📦 Purchase' : '🧴 Used'}</td>
             <td style="font-family:monospace;color:${isPurch ? 'var(--success,#4caf50)' : 'var(--danger)'}">
               ${isPurch ? '+' : '−'}${rQty}${unit ? ' ' + unit : ''}
             </td>
-            ${rows.some(r2 => r2.change_type === 'purchase') ? `<td style="font-family:monospace">${isPurch && rCost > 0 ? '$' + rCost.toFixed(4) : '—'}</td>` : ''}
+            ${rows.some(isPurchase) ? `<td style="font-family:monospace">${isPurch && rCost > 0 ? '$' + rCost.toFixed(4) : '—'}</td>` : ''}
             <td style="font-family:monospace">$${r.snapAvco.toFixed(4)}${unit ? ' / ' + unit : ''}</td>
-            <td style="color:var(--text-muted)">${r.notes || '—'}</td>
+            <td style="color:var(--text-muted)">${r.reason || '—'}</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -247,29 +250,20 @@ function openAddStockModal(item, root) {
       });
 
       // Log purchase lot to inventory_log
-      const logRow = {
-        item_id:      item.id,
-        item_name:    item.name,
-        change_type:  'purchase',
-        quantity:     qty,
+      const { error: logErr } = await insert('inventory_log', {
+        item_id:       item.id,
+        item_name:     item.name,
+        qty_change:    qty,
         cost_per_unit: costToUse,
-        purchased_at: purchDate,
-        logged_at:    new Date().toISOString(),
-        notes,
-      };
-      const { error: logErr } = await insert('inventory_log', logRow);
-      if (logErr) {
-        // Retry with minimal columns if schema differs
-        await insert('inventory_log', {
-          item_id:     item.id,
-          change_type: 'purchase',
-          quantity:    qty,
-          logged_at:   new Date().toISOString(),
-          notes,
-        });
-      }
+        purchased_at:  purchDate,
+        reason:        notes,
+      });
 
-      showToast(`✓ ${qty}${unit ? ' ' + unit : ''} added — new avg $${newAvco.toFixed(4)}${unit ? '/' + unit : ''}`);
+      if (logErr) {
+        showToast('Stock updated, but the history entry did not save', 'error');
+      } else {
+        showToast(`✓ ${qty}${unit ? ' ' + unit : ''} added — new avg $${newAvco.toFixed(4)}${unit ? '/' + unit : ''}`);
+      }
       closeModal();
       const { data } = await select('inventory_items', { order: 'name', ascending: true });
       allItems = data || [];

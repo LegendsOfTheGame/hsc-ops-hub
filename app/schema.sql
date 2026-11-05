@@ -112,7 +112,10 @@ create table if not exists inventory_log (
   qty_change      numeric(10,3),
   reason          text,
   cost_change     numeric(10,2),
-  created_at      timestamptz default now()
+  created_at      timestamptz default now(),
+  purchased_at    date,
+  cost_per_unit   numeric,
+  item_name       text
 );
 
 -- ── shifts ────────────────────────────────────────────────────────────────────

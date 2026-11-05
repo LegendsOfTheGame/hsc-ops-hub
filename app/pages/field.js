@@ -1174,18 +1174,20 @@ async function openSupplyModal(root) {
       await update('inventory_items', { id: itemId }, { quantity: curStock - qty });
 
       // Write to inventory_log for detailed tracking
-      await insert('inventory_log', {
+      const { error: invLogErr } = await insert('inventory_log', {
         item_id:    itemId,
         item_name:  itemName,
-        change_type: 'usage',
-        quantity:   -qty,
+        qty_change: -qty,
         date:       today,
-        logged_at:  new Date().toISOString(),
-        notes:      notes || null,
+        reason:     notes || null,
       });
 
       closeModal();
-      showToast(`✓ Logged ${qty} × ${itemName} ($${totalCost.toFixed(2)})`);
+      if (invLogErr) {
+        showToast(`Logged ${itemName}, but the inventory history entry did not save`, 'error');
+      } else {
+        showToast(`✓ Logged ${qty} × ${itemName} ($${totalCost.toFixed(2)})`);
+      }
       loadFieldHistory(root, today);
     });
   });
