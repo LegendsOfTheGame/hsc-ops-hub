@@ -19,7 +19,7 @@ const STREETS = [
   'St Ann St', 'Ruth St', 'Saint Olga St', 'Barnesdale Ave N',
 ];
 const OUTSIDE_STREETS = new Set(['St Ann St', 'Ruth St', 'Saint Olga St', 'Barnesdale Ave N']);
-const BIA_BARTON = [165, 673]; // Barton St E civic numbers from Ferguson to Sherman
+const BIA_BARTON = [191, 673]; // Barton St E civic numbers inside the BIA boundary
 
 // levy: commercial tax class, so the BIA levy is on its property tax bill
 // (vacant storefronts included). Places outside the BIA never count.
@@ -61,13 +61,16 @@ const addressKey = (num, unit, street, half = false) => {
   if (!unit) return `${civic} ${street}`;
   return /^[A-Z]$/.test(unit) ? `${civic}${unit} ${street}` : `${unit}-${civic} ${street}`;
 };
-// Default for the Outside BIA box; Haven can untick it.
-// Sherman Ave N north of Barton is outside except Pinch at 183 (Haven, 18 Oct 2026).
-const SHERMAN_IN_BIA = new Set([183]);
+// Default for the Outside BIA box; Haven can untick it. Follows the City's
+// Barton Village boundary (open-data layer Business_Improvement_Areas):
+// on Barton it covers 191–673, minus 200, which sits in the excluded corner
+// with 165, 170 and 190 (A&W / Tim Hortons). Sherman Ave N north of Barton is
+// outside; Pinch (183) may be an associate member, like Helping Hands, but
+// that is membership, not the boundary (Haven, 21 Oct 2026).
+const BARTON_OUTSIDE = new Set([200]);
 const outsideByRule = (num, street) =>
-  OUTSIDE_STREETS.has(street)
-  || (street === 'Barton St E' && (num < BIA_BARTON[0] || num > BIA_BARTON[1]))
-  || (street === 'Sherman Ave N' && !SHERMAN_IN_BIA.has(num));
+  OUTSIDE_STREETS.has(street) || street === 'Sherman Ave N'
+  || (street === 'Barton St E' && (num < BIA_BARTON[0] || num > BIA_BARTON[1] || BARTON_OUTSIDE.has(num)));
 
 export async function renderSurvey(root) {
   let street = 'Barton St E';

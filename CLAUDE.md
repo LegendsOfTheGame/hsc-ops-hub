@@ -42,4 +42,9 @@ deployed to GitHub Pages by `.github/workflows/deploy.yml` on every push to
 - Posts go out through the app's Branded Post page (Saved → Send to queue),
   which calls `hsc-post-upload` `POST /queue`. The worker re-checks these
   limits and refuses a caption that breaks them.
+- Never use Buffer's `addToQueue` from the app. The worker reads the
+  channel's queue times from Buffer, finds the next free slot itself (or uses
+  the picked time) and sends `customScheduled` moved by a random ±30 min per
+  channel. Buffer support asked for this after Meta suspended the account for
+  14 hours over same-day, same-time posts (November 2026).
 - Times are Eastern (`America/Toronto`).

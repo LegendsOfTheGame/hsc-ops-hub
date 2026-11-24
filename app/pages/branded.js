@@ -771,7 +771,9 @@ function placeLine(o) {
 
 // ── Send to queue ─────────────────────────────────────────────────────────────
 // hsc-post-upload POST /queue posts the saved image to Buffer. The worker
-// checks the same limits again before it sends anything.
+// checks the same limits again before it sends anything. No time = the next
+// free queue slot; either way the worker moves the time by up to ±30 min per
+// channel (Buffer's advice after Meta's same-time suspensions, Nov 2026).
 
 // tags: HSC hashtag rule — at most 5 on Instagram and Facebook, 1 on Threads
 const QUEUE_CHANNELS = {
@@ -816,7 +818,7 @@ function queueForm() {
       <div class="form-group">
         ${Object.entries(QUEUE_CHANNELS).map(([k, c]) => `<label><input type="checkbox" data-ch="${k}" checked> ${c.name}</label>`).join(' ')}
       </div>
-      <div class="form-group"><label>Post at (blank = next queue slot)</label><input type="datetime-local" data-q="due"></div>
+      <div class="form-group"><label>Post at (blank = next queue slot; either way the time moves up to 30 min earlier or later)</label><input type="datetime-local" data-q="due"></div>
       <div class="btn-group"><button class="btn btn-primary btn-sm" data-q="send" type="button">Send to queue</button></div>
       <div data-q="out"></div>
     </div>`;
@@ -885,8 +887,10 @@ function wireQueue(el, r) {
     if (count().length) { out.innerHTML = '<div class="bp-status bad">The caption is too long, or has too many hashtags, for a channel marked in red.</div>'; return; }
     const due = q('due').value ? new Date(q('due').value).toISOString() : null;
     const names = channels.map(ch => QUEUE_CHANNELS[ch].name).join(', ');
-    const when = due ? new Date(due).toLocaleString('en-CA', { timeZone: 'America/Toronto', dateStyle: 'medium', timeStyle: 'short' }) : 'the next queue slot';
-    if (!confirm(`Send this post to ${names} for ${when}?`)) return;
+    const fmt = iso => new Date(iso).toLocaleString('en-CA', { timeZone: 'America/Toronto', dateStyle: 'medium', timeStyle: 'short' });
+    const ask = `Send this post to ${names} for about ${due ? fmt(due) : 'the next queue slot'}? `
+      + 'Each channel gets its own time, up to 30 min earlier or later.';
+    if (!confirm(ask)) return;
 
     const btn = q('send');
     btn.disabled = true;
@@ -900,7 +904,7 @@ function wireQueue(el, r) {
       const j = await res.json().catch(() => ({}));
       if (!j.results) throw new Error(j.error || `queue failed (${res.status})`);
       out.innerHTML = j.results.map(x => x.ok
-        ? `<div class="bp-status ok">${esc(QUEUE_CHANNELS[x.channel].name)}: queued ✓</div>`
+        ? `<div class="bp-status ok">${esc(QUEUE_CHANNELS[x.channel].name)}: queued for ${esc(fmt(x.due_at))} ✓</div>`
         : `<div class="bp-status bad">${esc(QUEUE_CHANNELS[x.channel].name)}: ${esc(x.error)}</div>`).join('');
     } catch (err) {
       out.innerHTML = `<div class="bp-status bad">Not sent: ${esc(err.message)}</div>`;
