@@ -1,5 +1,5 @@
 import { select, insert, update, remove } from '../db.js';
-import { showToast, openModal, closeModal, localDateStr, fmtDate, fmtDateTime } from '../utils.js';
+import { showToast, openModal, closeModal, localDateStr, fmtDate, fmtDateTime, esc } from '../utils.js';
 
 const STATUSES   = ['Lead','Active Client','On Hold','Closed','Lost'];
 const PRIORITIES = ['Low','Medium','High','Urgent'];
@@ -55,13 +55,13 @@ function renderTable(root) {
     <thead><tr><th>Name</th><th>Address</th><th>Status</th><th>Priority</th><th>Contact</th><th>Next Action</th><th></th></tr></thead>
     <tbody>
       ${filtered.map(s => `<tr>
-        <td><strong>${s.name || '—'}</strong></td>
-        <td style="font-size:12px">${s.address || '—'}</td>
+        <td><strong>${esc(s.name || '—')}</strong></td>
+        <td style="font-size:12px">${esc(s.address || '—')}</td>
         <td>${statusBadge(s.status)}</td>
         <td>${priorityBadge(s.priority)}</td>
-        <td style="font-size:12px">${s.contact_name || '—'}</td>
-        <td style="font-size:12px;color:var(--text-muted)">${s.next_action || '—'}</td>
-        <td><button class="btn btn-sm btn-secondary" data-id="${s.id}">Open</button></td>
+        <td style="font-size:12px">${esc(s.contact_name || '—')}</td>
+        <td style="font-size:12px;color:var(--text-muted)">${esc(s.next_action || '—')}</td>
+        <td><button class="btn btn-sm btn-secondary" data-id="${esc(s.id)}">Open</button></td>
       </tr>`).join('')}
     </tbody>
   </table>`;
@@ -76,30 +76,30 @@ function renderTable(root) {
 
 function statusBadge(s) {
   const map = { 'Lead':'badge-info', 'Active Client':'badge-success', 'On Hold':'badge-warning', 'Closed':'badge-muted', 'Lost':'badge-danger' };
-  return `<span class="badge ${map[s] || 'badge-muted'}">${s || '—'}</span>`;
+  return `<span class="badge ${map[s] || 'badge-muted'}">${esc(s || '—')}</span>`;
 }
 
 function priorityBadge(p) {
   const map = { 'Low':'badge-muted', 'Medium':'badge-info', 'High':'badge-warning', 'Urgent':'badge-danger' };
-  return `<span class="badge ${map[p] || 'badge-muted'}">${p || '—'}</span>`;
+  return `<span class="badge ${map[p] || 'badge-muted'}">${esc(p || '—')}</span>`;
 }
 
 function openSiteModal(site, root) {
   const isNew = !site;
   const html = `
     <div class="modal-header">
-      <h2>${isNew ? 'Add Site' : site.name || 'Edit Site'}</h2>
+      <h2>${isNew ? 'Add Site' : esc(site.name || 'Edit Site')}</h2>
       <button class="modal-close">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-row">
         <div class="form-group">
           <label>Business Name</label>
-          <input type="text" id="s-name" value="${site?.name || ''}">
+          <input type="text" id="s-name" value="${esc(site?.name || '')}">
         </div>
         <div class="form-group">
           <label>Address</label>
-          <input type="text" id="s-addr" value="${site?.address || ''}">
+          <input type="text" id="s-addr" value="${esc(site?.address || '')}">
         </div>
       </div>
       <div class="form-row">
@@ -119,28 +119,28 @@ function openSiteModal(site, root) {
       <div class="form-row">
         <div class="form-group">
           <label>Contact Name</label>
-          <input type="text" id="s-cname" value="${site?.contact_name || ''}">
+          <input type="text" id="s-cname" value="${esc(site?.contact_name || '')}">
         </div>
         <div class="form-group">
           <label>Contact Phone</label>
-          <input type="tel" id="s-cphone" value="${site?.contact_phone || ''}">
+          <input type="tel" id="s-cphone" value="${esc(site?.contact_phone || '')}">
         </div>
       </div>
       <div class="form-group">
         <label>Contact Email</label>
-        <input type="email" id="s-cemail" value="${site?.contact_email || ''}">
+        <input type="email" id="s-cemail" value="${esc(site?.contact_email || '')}">
       </div>
       <div class="form-group">
         <label>Issue Summary</label>
-        <textarea id="s-issue" rows="2">${site?.issue_summary || ''}</textarea>
+        <textarea id="s-issue" rows="2">${esc(site?.issue_summary || '')}</textarea>
       </div>
       <div class="form-group">
         <label>Next Action</label>
-        <input type="text" id="s-next" value="${site?.next_action || ''}" placeholder="e.g. Follow up by phone Thu">
+        <input type="text" id="s-next" value="${esc(site?.next_action || '')}" placeholder="e.g. Follow up by phone Thu">
       </div>
       <div class="form-group">
         <label>Notes</label>
-        <textarea id="s-notes" rows="3">${site?.notes || ''}</textarea>
+        <textarea id="s-notes" rows="3">${esc(site?.notes || '')}</textarea>
       </div>
       <div class="btn-group">
         <button class="btn btn-primary" id="s-save">Save</button>

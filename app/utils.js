@@ -1,5 +1,16 @@
 // Shared helpers — imported by pages. No imports from app.js to avoid circular deps.
 
+// ── Safe output ───────────────────────────────────────────────────────────────
+// Stored text can come from the public report form. Anything put into innerHTML
+// goes through esc(); a stored link or image address goes through safeUrl().
+export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+// Only web addresses and inline images; javascript: and the like become empty
+export const safeUrl = s => {
+  const v = String(s ?? '').trim();
+  return /^(https?:\/\/|data:image\/)/i.test(v) ? esc(v) : '';
+};
+
 // ── Toast ─────────────────────────────────────────────────────────────────────
 export function showToast(msg, type = 'info', duration = 2500) {
   const t = document.getElementById('toast');
@@ -87,7 +98,7 @@ export function fmtDate(iso) {
   const s = iso.split('T')[0].split(' ')[0];
   const [y, m, d] = s.split('-');
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${months[+m-1]} ${+d}, ${y}`;
+  return `${months[+m-1]} ${+d}, ${+y}`;
 }
 
 export function fmtDateTime(iso) {
@@ -95,7 +106,7 @@ export function fmtDateTime(iso) {
   try {
     const d = new Date(iso);
     return d.toLocaleString('en-CA', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
-  } catch { return iso; }
+  } catch { return esc(iso); }
 }
 
 // ── Badge helpers ─────────────────────────────────────────────────────────────
@@ -107,7 +118,7 @@ export function diffBadge(d) {
     'Medium-Hard':  'badge-diff-medium-hard',
     'Hard':         'badge-diff-hard',
   };
-  return `<span class="badge ${map[d] || 'badge-muted'}">${d || '—'}</span>`;
+  return `<span class="badge ${map[d] || 'badge-muted'}">${esc(d || '—')}</span>`;
 }
 
 export function statusBadge(s) {
@@ -118,7 +129,7 @@ export function statusBadge(s) {
     'Complete':             'badge-muted',
     'Resolved by Business': 'badge-muted',
   };
-  return `<span class="badge ${map[s] || 'badge-muted'}">${s || '—'}</span>`;
+  return `<span class="badge ${map[s] || 'badge-muted'}">${esc(s || '—')}</span>`;
 }
 
 // ── Photos ────────────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { localDateStr, fmtDate } from '../utils.js';
+import { localDateStr, fmtDate, esc } from '../utils.js';
 
 // Events are stored in events.json in the repo root
 // For the web app, they're embedded here until we set up a Supabase events table
@@ -39,8 +39,8 @@ function eventRow(e, past) {
   return `<div style="display:flex;gap:16px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border);">
     <div style="min-width:90px;font-size:12px;font-family:monospace;color:${past ? 'var(--text-muted)' : 'var(--accent)'}">${fmtDate(e.date)}</div>
     <div>
-      <div style="font-size:14px;font-weight:600;${past ? 'color:var(--text-secondary)' : ''}">${e.title || e.name || 'Event'}</div>
-      ${e.description ? `<div style="font-size:12px;color:var(--text-muted)">${e.description}</div>` : ''}
+      <div style="font-size:14px;font-weight:600;${past ? 'color:var(--text-secondary)' : ''}">${esc(e.title || e.name || 'Event')}</div>
+      ${e.description ? `<div style="font-size:12px;color:var(--text-muted)">${esc(e.description)}</div>` : ''}
     </div>
   </div>`;
 }

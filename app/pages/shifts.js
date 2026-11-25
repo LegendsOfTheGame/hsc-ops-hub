@@ -1,5 +1,5 @@
 import { select, insert, update, remove } from '../db.js';
-import { showToast, openModal, closeModal, localDateStr, fmtDate } from '../utils.js';
+import { showToast, openModal, closeModal, localDateStr, fmtDate, esc } from '../utils.js';
 import { bagFactor } from './field.js';
 
 function fmtTime(ts) {
@@ -75,11 +75,11 @@ function renderShifts2(root) {
         <td>${fmtDate(r.date)}</td>
         <td style="white-space:nowrap">${fmtTime(r.start_time)}</td>
         <td style="white-space:nowrap">${fmtTime(r.end_time)}</td>
-        <td>${r.hours || '—'}</td>
+        <td>${esc(r.hours || '—')}</td>
         <td style="font-size:12px;color:var(--text-secondary)">${fieldSummary(r.date)}</td>
-        <td style="font-size:12px">${r.location || '—'}</td>
-        <td style="font-size:12px;color:var(--text-muted)">${r.notes || '—'}</td>
-        <td><button class="btn btn-sm btn-secondary" data-id="${r.id}">Edit</button></td>
+        <td style="font-size:12px">${esc(r.location || '—')}</td>
+        <td style="font-size:12px;color:var(--text-muted)">${esc(r.notes || '—')}</td>
+        <td><button class="btn btn-sm btn-secondary" data-id="${esc(r.id)}">Edit</button></td>
       </tr>`).join('')}
     </tbody>
   </table>`;
@@ -97,15 +97,15 @@ function shiftForm(rec) {
     <div class="modal-header"><h2>${isNew ? 'Log Shift' : 'Edit Shift'}</h2><button class="modal-close">✕</button></div>
     <div class="modal-body">
       <div class="form-row">
-        <div class="form-group"><label>Date</label><input type="date" id="sh-date" value="${rec?.date || localDateStr()}"></div>
-        <div class="form-group"><label>Hours</label><input type="number" id="sh-hours" step="0.25" value="${rec?.hours || ''}"></div>
+        <div class="form-group"><label>Date</label><input type="date" id="sh-date" value="${esc(rec?.date || localDateStr())}"></div>
+        <div class="form-group"><label>Hours</label><input type="number" id="sh-hours" step="0.25" value="${esc(rec?.hours || '')}"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Start Time</label><input type="time" id="sh-start" value="${toTimeInput(rec?.start_time)}"></div>
         <div class="form-group"><label>End Time</label><input type="time" id="sh-end" value="${toTimeInput(rec?.end_time)}"></div>
       </div>
-      <div class="form-group"><label>Location</label><input type="text" id="sh-loc" value="${rec?.location || ''}" placeholder="e.g. Barton St E"></div>
-      <div class="form-group"><label>Notes</label><textarea id="sh-notes" rows="2">${rec?.notes || ''}</textarea></div>
+      <div class="form-group"><label>Location</label><input type="text" id="sh-loc" value="${esc(rec?.location || '')}" placeholder="e.g. Barton St E"></div>
+      <div class="form-group"><label>Notes</label><textarea id="sh-notes" rows="2">${esc(rec?.notes || '')}</textarea></div>
       <div class="btn-group">
         <button class="btn btn-primary" id="sh-save">Save</button>
         ${!isNew ? `<button class="btn btn-danger" id="sh-del">Delete</button>` : ''}

@@ -1,5 +1,5 @@
 import { select, insert, update } from '../db.js';
-import { showToast, openModal, closeModal, getGPS, coordsStr, initChips, chipValue, localDateStr, fmtDateTime, shrinkPhoto, readPhotoMeta } from '../utils.js';
+import { showToast, openModal, closeModal, getGPS, coordsStr, initChips, chipValue, localDateStr, fmtDateTime, shrinkPhoto, readPhotoMeta, esc, safeUrl } from '../utils.js';
 import { uploadPhoto } from '../photos.js';
 import { ALECTRA_OWNER, ASSET_RE } from '../alectra.js';
 
@@ -428,7 +428,7 @@ function mountPendingSaves(root) {
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Kept on this phone only. Tap Retry when you have signal.</div>
       ${list.map(p => `
         <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border)">
-          ${p.row.image_url ? `<a href="${escHtml(p.row.image_url)}" target="_blank" rel="noopener" style="flex-shrink:0">📷</a>` : ''}
+          ${p.row.image_url ? `<a href="${safeUrl(p.row.image_url)}" target="_blank" rel="noopener" style="flex-shrink:0">📷</a>` : ''}
           <div style="flex:1;min-width:0">
             <div>${typeLabel(p.row)} · ${fmtDateTime(p.row.logged_at)}</div>
             <div style="font-size:12px;color:var(--text-muted)">${escHtml(p.row.notes)}</div>
@@ -508,8 +508,8 @@ async function loadFieldHistory(root, today) {
       ${rows.map(r => `<tr>
         <td style="white-space:nowrap">${fmtDateTime(r.logged_at)}</td>
         <td>${typeLabel(r)}</td>
-        <td>${r.property_name || r.location || '—'}</td>
-        <td style="color:var(--text-muted)">${r.image_url && r.type === 'bag_drop' ? `<a href="${r.image_url}" target="_blank" rel="noopener">📷</a> ` : ''}${r.notes || '—'}</td>
+        <td>${esc(r.property_name || r.location || '—')}</td>
+        <td style="color:var(--text-muted)">${r.image_url && r.type === 'bag_drop' ? `<a href="${safeUrl(r.image_url)}" target="_blank" rel="noopener">📷</a> ` : ''}${esc(r.notes || '—')}</td>
       </tr>`).join('')}
     </tbody>
   </table>`;
@@ -517,8 +517,8 @@ async function loadFieldHistory(root, today) {
 
 function typeLabel(r) {
   switch (r.type) {
-    case 'bag_drop':   return `🗑️ Bag${r.bag_color ? ` (${r.bag_color})` : ''}`;
-    case 'bin_full':   return `🚮 ${r.fill_level || 'Full'} bin`;
+    case 'bag_drop':   return `🗑️ Bag${r.bag_color ? ` (${esc(r.bag_color)})` : ''}`;
+    case 'bin_full':   return `🚮 ${esc(r.fill_level || 'Full')} bin`;
     case 'supply_use': return '🧴 Supply';
     default:           return '🚨 Graffiti';
   }
@@ -1002,9 +1002,9 @@ async function openGraffitiModal(root) {
       ).slice(0, 6);
       if (!matches.length) { dd.hidden = true; return; }
       dd.innerHTML = matches.map(p => `
-        <div class="ac-item" data-id="${p.id}" data-name="${p.name || ''}" data-addr="${p.address}">
-          ${p.name || '(No name)'}
-          <div class="ac-sub">${p.address}</div>
+        <div class="ac-item" data-id="${p.id}" data-name="${esc(p.name)}" data-addr="${esc(p.address)}">
+          ${esc(p.name || '(No name)')}
+          <div class="ac-sub">${esc(p.address)}</div>
         </div>
       `).join('');
       dd.hidden = false;
@@ -1093,7 +1093,7 @@ async function openSupplyModal(root) {
   const items = (data || []).filter(i => parseFloat(i.quantity) > 0);
 
   const options = items.length
-    ? items.map(i => `<option value="${i.id}" data-name="${i.name}" data-qty="${parseFloat(i.quantity || 0).toFixed(2)}" data-cost="${parseFloat(i.weighted_avg_cost || i.unit_cost || 0).toFixed(2)}">${i.name} (${parseFloat(i.quantity || 0)} in stock)</option>`).join('')
+    ? items.map(i => `<option value="${i.id}" data-name="${esc(i.name)}" data-qty="${parseFloat(i.quantity || 0).toFixed(2)}" data-cost="${parseFloat(i.weighted_avg_cost || i.unit_cost || 0).toFixed(2)}">${esc(i.name)} (${parseFloat(i.quantity || 0)} in stock)</option>`).join('')
     : '<option value="" disabled>No items in stock</option>';
 
   const html = `
@@ -1221,16 +1221,16 @@ async function loadCitizenReports(root) {
 
   wrap.innerHTML = reports.map(r => {
     const firstLine = (r.description || '').split('\n')[0] || '—';
-    return `<div class="citizen-report-row" data-id="${r.id}">
-      ${r.image_url ? `<a href="${r.image_url}" target="_blank" rel="noopener" style="flex-shrink:0">
-        <img src="${r.image_url}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+    return `<div class="citizen-report-row" data-id="${esc(r.id)}">
+      ${r.image_url ? `<a href="${safeUrl(r.image_url)}" target="_blank" rel="noopener" style="flex-shrink:0">
+        <img src="${safeUrl(r.image_url)}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
       </a>` : ''}
       <div class="cr-main">
-        <div class="cr-location">${r.location || '—'}</div>
-        <div class="cr-desc">${firstLine}</div>
-        <div class="cr-meta">${r.source_id || ''} · ${r.date || ''}</div>
+        <div class="cr-location">${esc(r.location || '—')}</div>
+        <div class="cr-desc">${esc(firstLine)}</div>
+        <div class="cr-meta">${esc(r.source_id || '')} · ${esc(r.date || '')}</div>
       </div>
-      <button class="btn btn-sm btn-secondary cr-done" data-id="${r.id}">✓ Done</button>
+      <button class="btn btn-sm btn-secondary cr-done" data-id="${esc(r.id)}">✓ Done</button>
     </div>`;
   }).join('');
 

@@ -1,5 +1,5 @@
 import { select, insert, update, remove } from '../db.js';
-import { showToast, openModal, closeModal, initChips, chipValue, setChip, localDateStr, fmtDate, fmtDateTime, diffBadge, statusBadge, navigate } from '../utils.js';
+import { showToast, openModal, closeModal, initChips, chipValue, setChip, localDateStr, fmtDate, fmtDateTime, diffBadge, statusBadge, navigate, esc, safeUrl } from '../utils.js';
 import { isDemo } from '../demo.js';
 import { ALECTRA_OWNER, ASSET_RE, describeSpot, alectraMailto, gpsSources } from '../alectra.js';
 
@@ -59,11 +59,11 @@ async function loadAlectra(root) {
       ${open.map((r, i) => {
         const photos = r.image_urls || (r.image_url ? [r.image_url] : []);
         return `
-        <div class="al-spot" data-id="${r.id}" style="border-top:1px solid var(--border);padding:10px 0">
+        <div class="al-spot" data-id="${esc(r.id)}" style="border-top:1px solid var(--border);padding:10px 0">
           <div style="font-size:12px;color:var(--text-muted);margin-bottom:2px">${fmtDateTime(r.logged_at)} · GPS ${esc(r.location || 'none')}${photos.length === 1 ? ' · <span style="color:var(--warning)">1 photo (Alectra prefers 2)</span>' : ''}</div>
           <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">${esc(gpsSources(r))}</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-            ${photos.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" style="width:64px;height:64px;object-fit:cover;border-radius:4px;border:1px solid var(--border)"></a>`).join('')}
+            ${photos.map(u => `<a href="${safeUrl(u)}" target="_blank" rel="noopener"><img src="${safeUrl(u)}" style="width:64px;height:64px;object-fit:cover;border-radius:4px;border:1px solid var(--border)"></a>`).join('')}
           </div>
           <div class="form-row">
             <div class="form-group" style="flex:0 0 140px">
@@ -114,7 +114,6 @@ async function loadAlectra(root) {
   });
 }
 
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 
 async function loadEntries(root) {
   const { data } = await select('graffiti_log', { order: 'timestamp', ascending: false });
@@ -150,18 +149,18 @@ function renderTable(root) {
     <tbody>
       ${filtered.map(r => `<tr>
         <td style="white-space:nowrap">${fmtDate(r.timestamp)}</td>
-        <td>${r.location || '—'}</td>
+        <td>${esc(r.location || '—')}</td>
         <td>${r.image_link
-          ? `<a href="${r.image_link}" target="_blank" rel="noopener">
-               <img src="${r.image_link}" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--border);display:block">
+          ? `<a href="${safeUrl(r.image_link)}" target="_blank" rel="noopener">
+               <img src="${safeUrl(r.image_link)}" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--border);display:block">
              </a>`
           : '<span style="color:var(--text-muted);font-size:12px">—</span>'}</td>
         <td>${statusBadge(r.status)}</td>
-        <td style="font-size:12px;color:var(--text-secondary)">${r.owner || '—'}</td>
-        <td style="font-size:12px">${r.surface_type || '—'}</td>
+        <td style="font-size:12px;color:var(--text-secondary)">${esc(r.owner || '—')}</td>
+        <td style="font-size:12px">${esc(r.surface_type || '—')}</td>
         <td>${r.difficulty ? diffBadge(r.difficulty) : '—'}</td>
-        <td style="font-size:12px;color:var(--text-muted);max-width:180px">${r.notes || '—'}</td>
-        <td><button class="btn btn-sm btn-secondary" data-id="${r.id}">Edit</button></td>
+        <td style="font-size:12px;color:var(--text-muted);max-width:180px">${esc(r.notes || '—')}</td>
+        <td><button class="btn btn-sm btn-secondary" data-id="${esc(r.id)}">Edit</button></td>
       </tr>`).join('')}
     </tbody>
   </table>`;
@@ -185,7 +184,7 @@ function openEntryModal(entry, root) {
       <div class="form-row">
         <div class="form-group">
           <label>Date</label>
-          <input type="date" id="e-date" value="${entry?.timestamp?.split(' ')[0] || localDateStr()}">
+          <input type="date" id="e-date" value="${esc(entry?.timestamp?.split(' ')[0] || localDateStr())}">
         </div>
         <div class="form-group">
           <label>Status</label>
@@ -196,11 +195,11 @@ function openEntryModal(entry, root) {
       </div>
       <div class="form-group">
         <label>Location</label>
-        <input type="text" id="e-location" value="${entry?.location || ''}" placeholder="e.g. 632 Barton St E — south wall">
+        <input type="text" id="e-location" value="${esc(entry?.location || '')}" placeholder="e.g. 632 Barton St E — south wall">
       </div>
       <div class="form-group">
         <label>GPS Coordinates</label>
-        <input type="text" id="e-gps" value="${entry?.gps || ''}" placeholder="43.25xxx, -79.87xxx">
+        <input type="text" id="e-gps" value="${esc(entry?.gps || '')}" placeholder="43.25xxx, -79.87xxx">
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -239,20 +238,20 @@ function openEntryModal(entry, root) {
       ${!isNew && entry?.status === 'Reported to City' ? `
       <div class="form-group">
         <label>Reported to City Date</label>
-        <input type="date" id="e-citydate" value="${entry?.reported_to_city_date || ''}">
+        <input type="date" id="e-citydate" value="${esc(entry?.reported_to_city_date || '')}">
       </div>` : ''}
       ${!isNew ? `
       <div class="form-group">
         <label>Date Cleaned</label>
-        <input type="date" id="e-cleaned" value="${entry?.date_cleaned || ''}">
+        <input type="date" id="e-cleaned" value="${esc(entry?.date_cleaned || '')}">
       </div>` : ''}
       <div class="form-group">
         <label>Image Link</label>
-        <input type="text" id="e-image" value="${entry?.image_link || ''}" placeholder="https://…">
+        <input type="text" id="e-image" value="${esc(entry?.image_link || '')}" placeholder="https://…">
       </div>
       <div class="form-group">
         <label>Notes</label>
-        <textarea id="e-notes" rows="3">${entry?.notes || ''}</textarea>
+        <textarea id="e-notes" rows="3">${esc(entry?.notes || '')}</textarea>
       </div>
       <div class="btn-group">
         <button class="btn btn-primary" id="e-save">Save</button>

@@ -1,5 +1,5 @@
 import { select, insert, remove } from '../db.js';
-import { showToast, openModal, closeModal, localDateStr, fmtDate } from '../utils.js';
+import { showToast, openModal, closeModal, localDateStr, fmtDate, esc } from '../utils.js';
 
 const CATEGORIES = ['Supplies','Fuel','Equipment','Phone','Parking','Other'];
 let allExpenses = [];
@@ -31,10 +31,10 @@ function renderExpenses2(root) {
     <tbody>
       ${allExpenses.map(r => `<tr>
         <td>${fmtDate(r.date)}</td>
-        <td><span class="badge badge-muted">${r.category || '—'}</span></td>
+        <td><span class="badge badge-muted">${esc(r.category || '—')}</span></td>
         <td>$${parseFloat(r.amount || 0).toFixed(2)}</td>
-        <td style="font-size:12px;color:var(--text-muted)">${r.notes || '—'}</td>
-        <td><button class="btn btn-sm btn-danger" data-id="${r.id}">Del</button></td>
+        <td style="font-size:12px;color:var(--text-muted)">${esc(r.notes || '—')}</td>
+        <td><button class="btn btn-sm btn-danger" data-id="${esc(r.id)}">Del</button></td>
       </tr>`).join('')}
     </tbody>
   </table>`;

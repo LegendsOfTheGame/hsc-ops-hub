@@ -1,5 +1,5 @@
 import { select, insert, update, remove } from '../db.js';
-import { showToast, openModal, closeModal, localDateStr, fmtDate, fmtDateTime } from '../utils.js';
+import { showToast, openModal, closeModal, localDateStr, fmtDate, fmtDateTime, esc } from '../utils.js';
 
 const STATUSES = ['Open','In Progress','Complete','Cancelled'];
 
@@ -39,11 +39,11 @@ function renderTable(root) {
         const overdue = j.status === 'Open' && j.due_date && j.due_date < localDateStr();
         return `<tr style="${overdue ? 'background:rgba(231,76,60,0.05)' : ''}">
           <td style="white-space:nowrap">${fmtDateTime(j.created_at)}</td>
-          <td>${j.description || '—'}</td>
-          <td style="font-size:12px">${j.location || '—'}</td>
+          <td>${esc(j.description || '—')}</td>
+          <td style="font-size:12px">${esc(j.location || '—')}</td>
           <td>${statusBadge(j.status)}</td>
           <td style="font-size:12px;${overdue ? 'color:var(--danger)' : ''}">${fmtDate(j.due_date)}${overdue ? ' ⚠' : ''}</td>
-          <td><button class="btn btn-sm btn-secondary" data-id="${j.id}">Edit</button></td>
+          <td><button class="btn btn-sm btn-secondary" data-id="${esc(j.id)}">Edit</button></td>
         </tr>`;
       }).join('')}
     </tbody>
@@ -58,7 +58,7 @@ function renderTable(root) {
 
 function statusBadge(s) {
   const map = { 'Open':'badge-warning', 'In Progress':'badge-info', 'Complete':'badge-success', 'Cancelled':'badge-muted' };
-  return `<span class="badge ${map[s] || 'badge-muted'}">${s || '—'}</span>`;
+  return `<span class="badge ${map[s] || 'badge-muted'}">${esc(s || '—')}</span>`;
 }
 
 function openJobModal(job, root) {
@@ -66,13 +66,13 @@ function openJobModal(job, root) {
   const html = `
     <div class="modal-header"><h2>${isNew ? 'Add BIA Job' : 'Edit Job'}</h2><button class="modal-close">✕</button></div>
     <div class="modal-body">
-      <div class="form-group"><label>Description</label><textarea id="bj-desc" rows="2">${job?.description || ''}</textarea></div>
-      <div class="form-group"><label>Location</label><input type="text" id="bj-loc" value="${job?.location || ''}"></div>
+      <div class="form-group"><label>Description</label><textarea id="bj-desc" rows="2">${esc(job?.description || '')}</textarea></div>
+      <div class="form-group"><label>Location</label><input type="text" id="bj-loc" value="${esc(job?.location || '')}"></div>
       <div class="form-row">
         <div class="form-group"><label>Status</label><select id="bj-status">${STATUSES.map(s => `<option value="${s}" ${job?.status === s ? 'selected':''}>${s}</option>`).join('')}</select></div>
-        <div class="form-group"><label>Due Date</label><input type="date" id="bj-due" value="${job?.due_date || ''}"></div>
+        <div class="form-group"><label>Due Date</label><input type="date" id="bj-due" value="${esc(job?.due_date || '')}"></div>
       </div>
-      <div class="form-group"><label>Notes</label><textarea id="bj-notes" rows="2">${job?.notes || ''}</textarea></div>
+      <div class="form-group"><label>Notes</label><textarea id="bj-notes" rows="2">${esc(job?.notes || '')}</textarea></div>
       <div class="btn-group">
         <button class="btn btn-primary" id="bj-save">Save</button>
         ${!isNew ? `<button class="btn btn-danger" id="bj-del">Delete</button>` : ''}

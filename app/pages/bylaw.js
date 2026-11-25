@@ -1,5 +1,5 @@
 import { select, insert, update } from '../db.js';
-import { showToast, localDateStr, openModal, closeModal, shrinkPhoto } from '../utils.js';
+import { showToast, localDateStr, openModal, closeModal, shrinkPhoto, esc } from '../utils.js';
 import { FINES, FINES_SOURCE } from '../bylaw-fines.js';
 import { uploadPhoto } from '../photos.js';
 const CITY_URL  = 'https://services.my.hamilton.ca/reportaproblem/';
@@ -685,17 +685,17 @@ async function loadBylawList(root) {
       <tbody>
         ${rows.map(r => `
           <tr>
-            <td style="white-space:nowrap">${r.date || '—'}</td>
-            <td>${r.category}</td>
-            <td style="white-space:nowrap;font-size:12px" title="${r.fields?.bylaw?.offence || ''}">${
-              r.fields?.bylaw === 'unsure' ? 'Not sure' : (r.fields?.bylaw?.section || '—')}</td>
-            <td>${r.address}</td>
-            <td style="font-size:12px;font-family:monospace">${r.city_reference || '—'}</td>
+            <td style="white-space:nowrap">${esc(r.date || '—')}</td>
+            <td>${esc(r.category)}</td>
+            <td style="white-space:nowrap;font-size:12px" title="${esc(r.fields?.bylaw?.offence || '')}">${
+              r.fields?.bylaw === 'unsure' ? 'Not sure' : esc(r.fields?.bylaw?.section || '—')}</td>
+            <td>${esc(r.address)}</td>
+            <td style="font-size:12px;font-family:monospace">${esc(r.city_reference || '—')}</td>
             <td>
               ${r.submitted_to_city
                 ? `<span style="color:var(--success);font-weight:600">✓ Filed</span>
-                   <button class="btn btn-sm btn-secondary edit-ref" data-id="${r.id}" style="margin-left:6px;font-size:10px">✏️</button>`
-                : `<button class="btn btn-sm btn-secondary mark-filed" data-id="${r.id}">Mark Filed</button>`}
+                   <button class="btn btn-sm btn-secondary edit-ref" data-id="${esc(r.id)}" style="margin-left:6px;font-size:10px">✏️</button>`
+                : `<button class="btn btn-sm btn-secondary mark-filed" data-id="${esc(r.id)}">Mark Filed</button>`}
             </td>
           </tr>`).join('')}
       </tbody>

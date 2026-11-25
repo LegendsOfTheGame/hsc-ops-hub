@@ -1,5 +1,5 @@
 import { select, insert, update, remove } from '../db.js';
-import { showToast, openModal, closeModal, localDateStr, fmtDate } from '../utils.js';
+import { showToast, openModal, closeModal, localDateStr, fmtDate, esc } from '../utils.js';
 
 const METHODS = ['call (outbound)','call (inbound)','text (outbound)','text (inbound)','email (outbound)','email (inbound)','facebook','instagram','in-person','letter','other'];
 const QUOTE_STATUSES = ['pending','received','accepted','rejected'];
@@ -41,12 +41,12 @@ function renderTable(root) {
     <tbody>
       ${filtered.map(r => `<tr>
         <td>${fmtDate(r.date)}</td>
-        <td style="font-size:12px">${r.method || '—'}</td>
-        <td>${r.contact_name || '—'}</td>
-        <td>${r.quote_amount ? `$${r.quote_amount} <span class="badge badge-muted">${r.quote_status || ''}</span>` : '—'}</td>
+        <td style="font-size:12px">${esc(r.method || '—')}</td>
+        <td>${esc(r.contact_name || '—')}</td>
+        <td>${r.quote_amount ? `$${esc(r.quote_amount)} <span class="badge badge-muted">${esc(r.quote_status || '')}</span>` : '—'}</td>
         <td style="font-size:12px;${r.follow_up_date && r.follow_up_date <= localDateStr() ? 'color:var(--warning)' : ''}">${fmtDate(r.follow_up_date)}</td>
-        <td style="font-size:12px;color:var(--text-muted)">${r.notes || '—'}</td>
-        <td><button class="btn btn-sm btn-secondary" data-id="${r.id}">Edit</button></td>
+        <td style="font-size:12px;color:var(--text-muted)">${esc(r.notes || '—')}</td>
+        <td><button class="btn btn-sm btn-secondary" data-id="${esc(r.id)}">Edit</button></td>
       </tr>`).join('')}
     </tbody>
   </table>`;
@@ -70,7 +70,7 @@ function openOutreachModal(rec, root) {
       <div class="form-row">
         <div class="form-group">
           <label>Date</label>
-          <input type="date" id="o-date" value="${rec?.date || localDateStr()}">
+          <input type="date" id="o-date" value="${esc(rec?.date || localDateStr())}">
         </div>
         <div class="form-group">
           <label>Method</label>
@@ -81,12 +81,12 @@ function openOutreachModal(rec, root) {
       </div>
       <div class="form-group">
         <label>Contact Name</label>
-        <input type="text" id="o-cname" value="${rec?.contact_name || ''}">
+        <input type="text" id="o-cname" value="${esc(rec?.contact_name || '')}">
       </div>
       <div class="form-row">
         <div class="form-group">
           <label>Quote Amount ($)</label>
-          <input type="number" id="o-quote" step="0.01" value="${rec?.quote_amount || ''}">
+          <input type="number" id="o-quote" step="0.01" value="${esc(rec?.quote_amount || '')}">
         </div>
         <div class="form-group">
           <label>Quote Status</label>
@@ -98,11 +98,11 @@ function openOutreachModal(rec, root) {
       </div>
       <div class="form-group">
         <label>Follow-up Date</label>
-        <input type="date" id="o-followup" value="${rec?.follow_up_date || ''}">
+        <input type="date" id="o-followup" value="${esc(rec?.follow_up_date || '')}">
       </div>
       <div class="form-group">
         <label>Notes</label>
-        <textarea id="o-notes" rows="3">${rec?.notes || ''}</textarea>
+        <textarea id="o-notes" rows="3">${esc(rec?.notes || '')}</textarea>
       </div>
       <div class="btn-group">
         <button class="btn btn-primary" id="o-save">Save</button>

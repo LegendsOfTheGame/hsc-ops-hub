@@ -1,5 +1,5 @@
 import { select, update } from '../db.js';
-import { navigate, fmtDate, showToast } from '../utils.js';
+import { navigate, fmtDate, showToast, esc } from '../utils.js';
 
 const DAY_NAMES   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -221,15 +221,15 @@ async function loadBylawTodo(root) {
   body.innerHTML = pending.map(r => {
     const detail = bylawDetailLine(r);
     return `
-      <div class="bylaw-todo-row" data-id="${r.id}">
+      <div class="bylaw-todo-row" data-id="${esc(r.id)}">
         <div class="bylaw-todo-check">☐</div>
         <div class="bylaw-todo-info">
-          <div class="bylaw-todo-cat">${r.category}</div>
-          <div class="bylaw-todo-addr">${r.address}</div>
-          ${detail ? `<div class="bylaw-todo-detail">${detail}</div>` : ''}
-          <div class="bylaw-todo-date">${r.date || ''}</div>
+          <div class="bylaw-todo-cat">${esc(r.category)}</div>
+          <div class="bylaw-todo-addr">${esc(r.address)}</div>
+          ${detail ? `<div class="bylaw-todo-detail">${esc(detail)}</div>` : ''}
+          <div class="bylaw-todo-date">${esc(r.date || '')}</div>
         </div>
-        <button class="btn btn-sm btn-secondary bylaw-mark-filed" data-id="${r.id}">Mark Filed</button>
+        <button class="btn btn-sm btn-secondary bylaw-mark-filed" data-id="${esc(r.id)}">Mark Filed</button>
       </div>
     `;
   }).join('');

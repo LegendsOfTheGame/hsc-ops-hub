@@ -1,5 +1,5 @@
 import { select, insert, update } from '../db.js';
-import { showToast, openModal, closeModal, localDateStr, fmtDate } from '../utils.js';
+import { showToast, openModal, closeModal, localDateStr, fmtDate, esc } from '../utils.js';
 import { getRole } from '../auth.js';
 
 let allItems = [];
@@ -34,11 +34,11 @@ function renderItems(root) {
       ${allItems.map(item => {
         const qty  = parseFloat(item.quantity) || 0;
         const cost = parseFloat(item.weighted_avg_cost || item.unit_cost) || 0;
-        const unit = item.unit || '';
+        const unit = esc(item.unit || '');
         const level = qty <= 0 ? 'color:var(--danger)' : qty < 16 ? 'color:var(--warning,#f5a623)' : 'color:var(--success,#4caf50)';
         return `<tr>
           <td>
-            <span class="inv-name-link" data-id="${item.id}" style="font-weight:700;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px">${item.name}</span>
+            <span class="inv-name-link" data-id="${esc(item.id)}" style="font-weight:700;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px">${esc(item.name)}</span>
             ${unit ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">(${unit})</span>` : ''}
           </td>
           <td><span style="${level};font-weight:600">${qty}${unit ? ' ' + unit : ''}</span></td>
@@ -46,9 +46,9 @@ function renderItems(root) {
           <td style="font-family:monospace">$${(qty * cost).toFixed(2)}</td>
           <td style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
             ${isField
-              ? `<button class="btn btn-sm btn-secondary inv-stock-btn" data-id="${item.id}">+ Stock</button>`
-              : `<button class="btn btn-sm btn-secondary inv-edit-btn" data-id="${item.id}">Edit</button>
-                 <button class="btn btn-sm btn-secondary inv-stock-btn" data-id="${item.id}">+ Stock</button>`
+              ? `<button class="btn btn-sm btn-secondary inv-stock-btn" data-id="${esc(item.id)}">+ Stock</button>`
+              : `<button class="btn btn-sm btn-secondary inv-edit-btn" data-id="${esc(item.id)}">Edit</button>
+                 <button class="btn btn-sm btn-secondary inv-stock-btn" data-id="${esc(item.id)}">+ Stock</button>`
             }
           </td>
         </tr>`;
@@ -79,13 +79,13 @@ function renderItems(root) {
 // ── History modal ─────────────────────────────────────────────────────────────
 
 async function openHistoryModal(item) {
-  const unit = item.unit || '';
+  const unit = esc(item.unit || '');
   const avco = parseFloat(item.weighted_avg_cost || item.unit_cost) || 0;
   const qty  = parseFloat(item.quantity) || 0;
 
   const html = `
     <div class="modal-header">
-      <h2>📊 ${item.name}</h2>
+      <h2>📊 ${esc(item.name)}</h2>
       <button class="modal-close">✕</button>
     </div>
     <div class="modal-body">
@@ -151,7 +151,7 @@ async function openHistoryModal(item) {
             </td>
             ${rows.some(isPurchase) ? `<td style="font-family:monospace">${isPurch && rCost > 0 ? '$' + rCost.toFixed(4) : '—'}</td>` : ''}
             <td style="font-family:monospace">$${r.snapAvco.toFixed(4)}${unit ? ' / ' + unit : ''}</td>
-            <td style="color:var(--text-muted)">${r.reason || '—'}</td>
+            <td style="color:var(--text-muted)">${esc(r.reason || '—')}</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -163,11 +163,11 @@ async function openHistoryModal(item) {
 
 function openAddStockModal(item, root) {
   const curCost = parseFloat(item.weighted_avg_cost || item.unit_cost || 0);
-  const unit = item.unit || '';
+  const unit = esc(item.unit || '');
   const today = localDateStr();
 
   const html = `
-    <div class="modal-header"><h2>+ Stock — ${item.name}</h2><button class="modal-close">✕</button></div>
+    <div class="modal-header"><h2>+ Stock — ${esc(item.name)}</h2><button class="modal-close">✕</button></div>
     <div class="modal-body">
       <div class="form-group">
         <label>Purchase Date</label>
@@ -277,26 +277,26 @@ function openAddStockModal(item, root) {
 function openItemModal(item, root) {
   const isNew = !item;
   const html = `
-    <div class="modal-header"><h2>${isNew ? 'Add Item' : 'Edit — ' + item.name}</h2><button class="modal-close">✕</button></div>
+    <div class="modal-header"><h2>${isNew ? 'Add Item' : 'Edit — ' + esc(item.name)}</h2><button class="modal-close">✕</button></div>
     <div class="modal-body">
       <div class="form-row">
         <div class="form-group" style="flex:2">
           <label>Name</label>
-          <input type="text" id="inv-name" value="${item?.name || ''}">
+          <input type="text" id="inv-name" value="${esc(item?.name || '')}">
         </div>
         <div class="form-group" style="flex:1">
           <label>Unit <span style="font-weight:400;font-size:11px">e.g. oz, wipes</span></label>
-          <input type="text" id="inv-unit" value="${item?.unit || ''}" placeholder="oz">
+          <input type="text" id="inv-unit" value="${esc(item?.unit || '')}" placeholder="oz">
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
           <label>Current Qty</label>
-          <input type="number" id="inv-qty" step="0.01" value="${item?.quantity || ''}">
+          <input type="number" id="inv-qty" step="0.01" value="${esc(item?.quantity || '')}">
         </div>
         <div class="form-group">
           <label>Avg Cost ($) / unit</label>
-          <input type="number" id="inv-cost" step="0.0001" value="${item?.weighted_avg_cost || item?.unit_cost || ''}">
+          <input type="number" id="inv-cost" step="0.0001" value="${esc(item?.weighted_avg_cost || item?.unit_cost || '')}">
         </div>
       </div>
       <details style="margin-bottom:12px">
