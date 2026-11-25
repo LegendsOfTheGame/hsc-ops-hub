@@ -264,7 +264,9 @@ html, body {
   font-size: 13px;
   font-weight: 500;
   z-index: 200;
-  white-space: nowrap;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  text-align: center;
   opacity: 0;
   transition: opacity 0.2s;
   pointer-events: none;
@@ -359,6 +361,10 @@ html, body {
 .data-table tr:last-child td { border-bottom: none; }
 .data-table tr:hover td { background: rgba(230,168,23,0.03); }
 .data-table .row-action { cursor: pointer; }
+/* Phones: a wide table scrolls sideways inside itself, so its buttons can be reached */
+@media (max-width: 767px) {
+  .data-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
 
 /* ── Badges ── */
 .badge {

@@ -59,9 +59,10 @@ const LB_PER_KG = 2.20462;
 // over 25 lb needs a confirmation (Haven, 25 Nov 2026). So does one under 1 kg,
 // except Yellow: those bags are small.
 const ASK_OVER_LB  = 25;
-const ASK_UNDER_LB = LB_PER_KG; // 1 kg
+const ASK_UNDER_KG = 1; // compared after rounding to 0.01 kg, as it is saved
 
-const unusualWeight = (lb, color) => lb > 0 && (lb > ASK_OVER_LB || (color !== 'Yellow' && lb < ASK_UNDER_LB));
+const unusualWeight = (lb, color) => lb > 0 && (lb > ASK_OVER_LB
+  || (color !== 'Yellow' && Math.round(lb / LB_PER_KG * 100) / 100 < ASK_UNDER_KG));
 
 // ── Repeat-tap guard ─────────────────────────────────────────────────────────
 // A second tap on Log within 30 s wrote the same entry twice (supplies 13 Oct,
@@ -116,8 +117,10 @@ function setPendingSaves(list) {
   try { localStorage.setItem(PENDING_KEY, JSON.stringify(list)); } catch {}
 }
 
+// cleared: the tally was reset when this bag was queued. Bags queued before
+// v2.26.3 have no flag; their tally is still on the card and Retry clears it.
 function addPendingSave(row) {
-  setPendingSaves([...getPendingSaves(), { id: `${Date.now()}`, row }]);
+  setPendingSaves([...getPendingSaves(), { id: `${Date.now()}`, row, cleared: true }]);
 }
 
 function removePendingSave(id) {
@@ -467,8 +470,7 @@ function mountPendingSaves(root) {
       return;
     }
     removePendingSave(pending.id);
-    startNewBag(); // the bag is logged: clear the tally
-    refreshBagCard();
+    if (!pending.cleared) { startNewBag(); refreshBagCard(); }
     refresh();
     showToast(result === 'fallback'
       ? 'Bag saved, but weight/time columns are missing — run the schema.sql migration'
@@ -481,7 +483,12 @@ function mountPendingSaves(root) {
 }
 
 async function loadFieldHistory(root, today) {
-  const { data } = await select('field_logs', { filter: { date: today }, order: 'logged_at', ascending: false });
+  const { data, error } = await select('field_logs', { filter: { date: today }, order: 'logged_at', ascending: false });
+  if (error) {
+    const h = root.querySelector('#field-history');
+    if (h) h.innerHTML = '<div class="empty-state">Could not load today\'s log. Check the connection.</div>';
+    return; // leave the counters as they are
+  }
   const rows = data || [];
 
   // Compute counters from DB
@@ -697,6 +704,8 @@ function openBagModal(root) {
       // A half-typed or unreadable number reads as blank, and would save with no weight
       if (weightInput.validity.badInput) { showToast('Weight is not a number — check it', 'error'); weightInput.focus(); return; }
       const weightRaw = parseFloat(weightInput.value);
+      // Blank is allowed; a typed 0 or minus number would silently save as blank
+      if (weightInput.value.trim() && !(weightRaw > 0)) { showToast('Weight must be more than 0, or blank', 'error'); weightInput.focus(); return; }
       const weightKg  = weightRaw > 0 ? toKg(weightRaw) : null;
       const lb = toLb(weightRaw);
       if (unusualWeight(lb, color) && !confirm(`You typed ${weightRaw} ${unit}. That is ${fmtWeight(weightKg)}, ${lb > ASK_OVER_LB ? 'over 25 lb' : 'under 1 kg'}.
@@ -760,8 +769,10 @@ Check the decimal point. Save this weight?`)) {
       const result = await saveBagRow(row);
       if (result && result !== 'fallback') {
         // Refused: keep the whole row (photo URL included) on this phone for Retry.
-        // The tally stays until the retry succeeds.
+        // The row holds this bag's tally, so the next bag starts clean.
         addPendingSave(row);
+        startNewBag();
+        refreshBagCard();
         releaseLog('bag_drop');
         showToast('Not saved — kept on this phone. Tap Retry on the Field page', 'error');
         closeModal();
@@ -1100,7 +1111,7 @@ async function openGraffitiModal(root) {
         status: 'Pending',
       };
       const { error } = await insert('field_logs', row);
-      if (error) { showToast('Failed to save — check connection', 4000); submitBtn.disabled = false; submitBtn.textContent = 'Log Graffiti'; return; }
+      if (error) { showToast('Failed to save — check connection', 'error'); submitBtn.disabled = false; submitBtn.textContent = 'Log Graffiti'; return; }
 
       // Also write to graffiti_log for management tracking
       await insert('graffiti_log', {
@@ -1175,6 +1186,7 @@ async function openSupplyModal(root) {
     sel.addEventListener('change', updateHint);
     qtyEl.addEventListener('input', updateHint);
 
+    let attempt = null; // the last refused entry, so a retry reuses its time and can be found
     box.querySelector('#sup-submit').addEventListener('click', async () => {
       const opt      = sel.selectedOptions[0];
       const itemId   = sel.value;
@@ -1201,12 +1213,37 @@ async function openSupplyModal(root) {
         notes:     notes ? `${itemName} ×${qty} — ${notes}` : `${itemName} ×${qty}`,
         supply_cost: totalCost,
       };
-      if (!claimLog(`supply_use|${itemId}|${logRow.notes}`)) { showToast('This supply was logged under 30 seconds ago — not saved twice', 'error'); return; }
-      let { error: logErr } = await insert('field_logs', logRow);
-      if (logErr) await insert('field_logs', { ...logRow, supply_cost: undefined });
+      const key = `supply_use|${itemId}|${logRow.notes}`;
+      if (!claimLog(key)) { showToast('This supply was logged under 30 seconds ago — not saved twice', 'error'); return; }
+      const btn = box.querySelector('#sup-submit');
+      btn.disabled = true;
+      const notSaved = () => {
+        releaseLog(key);
+        btn.disabled = false;
+        showToast('Not saved — check connection and tap Log Usage again', 'error');
+      };
 
-      // Decrement stock
-      await update('inventory_items', { id: itemId }, { quantity: curStock - qty });
+      // A refused try may have reached Supabase before the reply was lost: look for
+      // it by its exact time, so the retry can't save it twice
+      let saved = false;
+      if (attempt?.key === key) {
+        logRow.logged_at = attempt.logged_at;
+        const { data: found, error } = await select('field_logs', { filter: { type: 'supply_use', logged_at: attempt.logged_at }, limit: 1 });
+        if (error) { notSaved(); return; }
+        saved = found.length > 0;
+      }
+      attempt = { key, logged_at: logRow.logged_at };
+      if (!saved) {
+        let { error: logErr } = await insert('field_logs', logRow);
+        // An object is a reply from Supabase (a missing column); text is no connection
+        if (logErr && typeof logErr !== 'string') ({ error: logErr } = await insert('field_logs', { ...logRow, supply_cost: undefined }));
+        if (logErr) { notSaved(); return; }
+      }
+
+      // Decrement stock. It writes a fixed number, so a second try is safe
+      const stock = { quantity: curStock - qty };
+      let { error: stockErr } = await update('inventory_items', { id: itemId }, stock);
+      if (stockErr) ({ error: stockErr } = await update('inventory_items', { id: itemId }, stock));
 
       // Write to inventory_log for detailed tracking
       const { error: invLogErr } = await insert('inventory_log', {
@@ -1218,7 +1255,9 @@ async function openSupplyModal(root) {
       });
 
       closeModal();
-      if (invLogErr) {
+      if (stockErr) {
+        showToast(`Logged ${itemName}, but stock did not go down — fix it in Inventory`, 'error');
+      } else if (invLogErr) {
         showToast(`Logged ${itemName}, but the inventory history entry did not save`, 'error');
       } else {
         showToast(`✓ Logged ${qty} × ${itemName} ($${totalCost.toFixed(2)})`);

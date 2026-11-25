@@ -83,8 +83,9 @@ function openJobModal(job, root) {
     box.querySelector('#bj-cancel').addEventListener('click', closeModal);
     box.querySelector('#bj-save').addEventListener('click', async () => {
       const row = { description: box.querySelector('#bj-desc').value.trim(), location: box.querySelector('#bj-loc').value.trim() || null, status: box.querySelector('#bj-status').value, due_date: box.querySelector('#bj-due').value || null, notes: box.querySelector('#bj-notes').value.trim() || null };
-      if (isNew) { await insert('bia_jobs', row); showToast('✓ Job added'); }
-      else       { await update('bia_jobs', { id: job.id }, row); showToast('✓ Updated'); }
+      const { error } = isNew ? await insert('bia_jobs', row) : await update('bia_jobs', { id: job.id }, row);
+      if (error) { showToast('Not saved — check connection and try again', 'error'); return; }
+      showToast(isNew ? '✓ Job added' : '✓ Updated');
       closeModal();
       const { data } = await select('bia_jobs', { order: 'created_at', ascending: false });
       allJobs = data || [];

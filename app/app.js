@@ -109,7 +109,10 @@ function getPunch() {
   try { return JSON.parse(localStorage.getItem(PUNCH_KEY)); } catch { return null; }
 }
 
+let redrawPunch = null; // set once: boot() runs again after each sign-in on the same page
+
 function initPunchClock() {
+  if (redrawPunch) { redrawPunch(); return; }
   const btn     = document.getElementById('punch-btn');
   const timerEl = document.getElementById('punch-timer');
   const elapsed = document.getElementById('punch-elapsed');
@@ -147,6 +150,7 @@ function initPunchClock() {
   function tick() {
     const punch = getPunch();
     if (!punch) return;
+    if (!getAuthUser()) return; // signed out: the open shift waits on the phone
     if (document.hidden) return; // nothing to redraw while the phone is locked / app in background
     const cutoff = shiftCutoff(punch.start);
     if (Date.now() >= cutoff.getTime()) { endShift(punch, cutoff, true); return; }
@@ -193,6 +197,7 @@ function initPunchClock() {
   });
 
   document.addEventListener('visibilitychange', tick);
+  redrawPunch = updateDisplay;
   updateDisplay();
 }
 
@@ -236,6 +241,11 @@ function showLogin(errorMsg = '') {
   document.getElementById('mobile-topbar').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('login-error').textContent = errorMsg;
+  // Signing in left the button off and the password filled
+  const btn = document.getElementById('login-btn');
+  btn.textContent = 'Sign In';
+  btn.disabled = false;
+  document.getElementById('login-password').value = '';
   document.getElementById('login-email').focus();
 }
 

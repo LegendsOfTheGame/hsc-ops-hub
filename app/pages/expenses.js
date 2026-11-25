@@ -68,7 +68,8 @@ function openExpenseModal(root) {
     box.querySelector('#ex-cancel').addEventListener('click', closeModal);
     box.querySelector('#ex-save').addEventListener('click', async () => {
       const row = { date: box.querySelector('#ex-date').value, amount: parseFloat(box.querySelector('#ex-amount').value) || 0, category: box.querySelector('#ex-cat').value, notes: box.querySelector('#ex-notes').value.trim() || null };
-      await insert('personal_expenses', row);
+      const { error } = await insert('personal_expenses', row);
+      if (error) { showToast('Not saved — check connection and try again', 'error'); return; }
       closeModal();
       showToast('✓ Expense added');
       const { data } = await select('personal_expenses', { order: 'date', ascending: false });

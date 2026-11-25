@@ -32,10 +32,11 @@ export async function renderShifts(root) {
     <div id="sh-wrap"><div class="loading">Loading…</div></div>
   `;
   root.querySelector('#sh-add').addEventListener('click', () => openModal(shiftForm(null), box => mountShiftForm(box, null, root)));
-  const [{ data: shifts }, { data: logs }] = await Promise.all([
+  const [{ data: shifts, error: loadErr }, { data: logs }] = await Promise.all([
     select('shifts',    { order: 'date', ascending: false }),
     select('field_logs', { order: 'date', ascending: false }),
   ]);
+  if (loadErr) { root.querySelector('#sh-wrap').innerHTML = '<div class="empty-state">Could not load shifts. Check the connection and open this page again.</div>'; return; }
   allShifts = shifts || [];
   // Group field logs by date
   fieldByDate = (logs || []).reduce((acc, log) => {
@@ -127,8 +128,11 @@ async function mountShiftForm(box, rec, root) {
       location:   box.querySelector('#sh-loc').value.trim() || null,
       notes:      box.querySelector('#sh-notes').value.trim() || null,
     };
-    if (isNew) { await insert('shifts', row); showToast('✓ Shift logged'); }
-    else       { await update('shifts', { id: rec.id }, row); showToast('✓ Updated'); }
+    const saveBtn = box.querySelector('#sh-save');
+    saveBtn.disabled = true;
+    const { error } = isNew ? await insert('shifts', row) : await update('shifts', { id: rec.id }, row);
+    if (error) { showToast('Not saved — check connection and try again', 'error'); saveBtn.disabled = false; return; }
+    showToast(isNew ? '✓ Shift logged' : '✓ Updated');
     closeModal();
     const { data } = await select('shifts', { order: 'date', ascending: false });
     allShifts = data || [];
@@ -136,7 +140,8 @@ async function mountShiftForm(box, rec, root) {
   });
   box.querySelector('#sh-del')?.addEventListener('click', async () => {
     if (!confirm('Delete?')) return;
-    await remove('shifts', { id: rec.id });
+    const { error } = await remove('shifts', { id: rec.id });
+    if (error) { showToast('Not deleted — check connection', 'error'); return; }
     closeModal();
     const { data } = await select('shifts', { order: 'date', ascending: false });
     allShifts = data || [];

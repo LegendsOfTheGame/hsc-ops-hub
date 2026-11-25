@@ -732,7 +732,8 @@ function promptMarkFiled(id, root) {
     box.querySelector('#mf-cancel').addEventListener('click', closeModal);
     box.querySelector('#mf-save').addEventListener('click', async () => {
       const ref = box.querySelector('#mf-ref').value.trim() || null;
-      await update('bylaw_reports', { id }, { submitted_to_city: true, city_reference: ref });
+      const { error } = await update('bylaw_reports', { id }, { submitted_to_city: true, city_reference: ref });
+      if (error) { showToast('Not saved — check connection and try again', 'error'); return; }
       closeModal();
       showToast('✓ Marked as filed with City');
       loadBylawList(root);
@@ -762,7 +763,8 @@ function promptEditRef(id, root) {
     box.querySelector('#er-cancel').addEventListener('click', closeModal);
     box.querySelector('#er-save').addEventListener('click', async () => {
       const ref = box.querySelector('#er-ref').value.trim() || null;
-      await update('bylaw_reports', { id }, { city_reference: ref });
+      const { error } = await update('bylaw_reports', { id }, { city_reference: ref });
+      if (error) { showToast('Not saved — check connection and try again', 'error'); return; }
       closeModal();
       showToast('✓ Confirmation number saved');
       loadBylawList(root);

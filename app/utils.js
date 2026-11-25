@@ -12,17 +12,22 @@ export const safeUrl = s => {
 };
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
+// One pair of timers: an older message's timer must not hide a newer message
+let toastTimer, toastHideTimer;
+
 export function showToast(msg, type = 'info', duration = 2500) {
   const t = document.getElementById('toast');
   if (!t) return;
+  clearTimeout(toastTimer);
+  clearTimeout(toastHideTimer);
   t.textContent = msg;
   t.hidden = false;
   t.classList.remove('show', 'toast-error');
   if (type === 'error') { t.classList.add('toast-error'); duration = 6000; }
   t.classList.add('show');
-  setTimeout(() => {
+  toastTimer = setTimeout(() => {
     t.classList.remove('show', 'toast-error');
-    setTimeout(() => { t.hidden = true; }, 200);
+    toastHideTimer = setTimeout(() => { t.hidden = true; }, 200);
   }, duration);
 }
 

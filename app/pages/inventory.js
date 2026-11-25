@@ -218,7 +218,7 @@ function openAddStockModal(item, root) {
       const result = box.querySelector('#pkg-result');
       if (price > 0 && units > 0) {
         const perUnit = price / units;
-        result.textContent = `→ $${perUnit.toFixed(4)} per ${unit || 'unit'}`;
+        result.textContent = `→ $${perUnit.toFixed(4)} per ${item.unit || 'unit'}`;
         result.style.color = 'var(--accent)';
         box.querySelector('#inv-add-cost').value = perUnit.toFixed(4);
         box.querySelector('#inv-add-qty').value  = units.toFixed(2).replace(/\.?0+$/, '');
@@ -244,10 +244,12 @@ function openAddStockModal(item, root) {
       const costToUse = (!isNaN(newCost) && newCost > 0) ? newCost : oldCost;
       const newAvco = totalQty > 0 ? (oldQty * oldCost + qty * costToUse) / totalQty : costToUse;
 
-      await update('inventory_items', { id: item.id }, {
+      // Fixed numbers, so tapping again after a lost reply is safe
+      const { error: stockErr } = await update('inventory_items', { id: item.id }, {
         quantity: totalQty,
         weighted_avg_cost: newAvco,
       });
+      if (stockErr) { showToast('Not saved — check connection and try again', 'error'); return; }
 
       // Log purchase lot to inventory_log
       const { error: logErr } = await insert('inventory_log', {
@@ -262,7 +264,7 @@ function openAddStockModal(item, root) {
       if (logErr) {
         showToast('Stock updated, but the history entry did not save', 'error');
       } else {
-        showToast(`✓ ${qty}${unit ? ' ' + unit : ''} added — new avg $${newAvco.toFixed(4)}${unit ? '/' + unit : ''}`);
+        showToast(`✓ ${qty}${item.unit ? ' ' + item.unit : ''} added — new avg $${newAvco.toFixed(4)}${item.unit ? '/' + item.unit : ''}`);
       }
       closeModal();
       const { data } = await select('inventory_items', { order: 'name', ascending: true });

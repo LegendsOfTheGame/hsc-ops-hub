@@ -74,7 +74,7 @@ function renderTable(root) {
           notes:      `[Citizen Report ${report.source_id || ''}]\n${report.description || ''}`.trim(),
         });
         if (insertErr) {
-          showToast('Failed to add to Graffiti Log', 4000);
+          showToast('Failed to add to Graffiti Log', 'error');
           console.error('graffiti_log insert error:', insertErr);
           btn.disabled = false;
           return;
@@ -84,7 +84,7 @@ function renderTable(root) {
       const newStatus = action === 'import' ? 'imported' : 'dismissed';
       const { error } = await update('incoming_reports', { id: btn.dataset.id }, { status: newStatus });
       if (error) {
-        showToast('Status update failed — check console', 4000);
+        showToast('Status update failed — check console', 'error');
         console.error('inbox update error:', error);
         btn.disabled = false;
         return;

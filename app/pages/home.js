@@ -87,6 +87,20 @@ async function loadStats(root) {
     select('client_sites'),
   ]);
 
+  // A failed load must never read as "All clear" or zero
+  if (graffiti.error || reports.error || sites.error) {
+    for (const id of ['graffiti', 'inbox', 'leads', 'pipeline']) {
+      const el = root.querySelector('#stat-' + id);
+      if (el) el.textContent = '—';
+    }
+    const att = root.querySelector('#attention-body');
+    if (att) {
+      att.innerHTML = '<div style="color:var(--warning);font-size:13px;">⚠ Could not load. Check the connection. <button class="btn btn-sm btn-secondary" id="home-retry">Retry</button></div>';
+      att.querySelector('#home-retry').addEventListener('click', () => navigate('home'));
+    }
+    return;
+  }
+
   const activeGraffiti = (graffiti.data || []).filter(r =>
     r.status !== 'HSC Cleaned' && r.status !== 'Complete' && r.status !== 'Resolved by Business'
   );
@@ -205,7 +219,8 @@ async function loadBylawTodo(root) {
   const badge = root.querySelector('#bylaw-todo-badge');
   if (!body) return;
 
-  const { data } = await select('bylaw_reports', { order: 'created_at', ascending: true });
+  const { data, error } = await select('bylaw_reports', { order: 'created_at', ascending: true });
+  if (error) { body.innerHTML = '<div style="color:var(--warning);font-size:13px;">⚠ Could not load.</div>'; return; }
   const pending = (data || []).filter(r => !r.submitted_to_city);
 
   if (badge) {
@@ -238,7 +253,8 @@ async function loadBylawTodo(root) {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
       btn.textContent = '…';
-      await update('bylaw_reports', { id: btn.dataset.id }, { submitted_to_city: true });
+      const { error } = await update('bylaw_reports', { id: btn.dataset.id }, { submitted_to_city: true });
+      if (error) { showToast('Not saved — check connection and try again', 'error'); btn.disabled = false; btn.textContent = 'Mark Filed'; return; }
       showToast('✓ Marked as filed with City');
       loadBylawTodo(root);
     });

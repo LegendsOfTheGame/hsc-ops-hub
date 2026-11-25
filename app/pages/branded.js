@@ -8,7 +8,7 @@
 import { select, insert } from '../db.js';
 import { getFreshToken } from '../auth.js';
 import { UPLOAD_WORKER_URL } from '../config.js';
-import { readPhotoMeta } from '../utils.js';
+import { readPhotoMeta, safeUrl } from '../utils.js';
 
 const W = 1080, H = 1440;
 const M = 56;                       // side margin, same as the workers
@@ -922,7 +922,7 @@ async function renderSaved(el) {
 
   el.innerHTML = `<div class="bp-grid">${data.map((r, i) => `
     <button class="bp-thumb" data-i="${i}" type="button" title="${esc(r.headline || LAYOUTS[r.layout])}">
-      <img src="${esc(r.image_url)}" loading="lazy" alt="">
+      <img src="${safeUrl(r.image_url)}" loading="lazy" alt="">
     </button>`).join('')}</div>
     <div id="bp-detail"></div>`;
 
@@ -934,12 +934,12 @@ function showDetail(el, r) {
   el.innerHTML = `
     <div class="card bp-detail">
       <div class="bp-detail-main">
-        <img src="${esc(r.image_url)}" alt="">
+        <img src="${safeUrl(r.image_url)}" alt="">
         <div>
           <div class="card-title">${esc(r.headline || LAYOUTS[r.layout])}</div>
           <div class="bp-meta">${esc(LAYOUTS[r.layout])} · saved ${esc(when)}</div>
           <div class="btn-group">
-            <a class="btn btn-secondary btn-sm" href="${esc(r.image_url)}" target="_blank" rel="noopener">Open post image</a>
+            <a class="btn btn-secondary btn-sm" href="${safeUrl(r.image_url)}" target="_blank" rel="noopener">Open post image</a>
             <button class="btn btn-secondary btn-sm" data-copy="${esc(r.short_url || r.image_url)}" type="button">Copy post link</button>
           </div>
           <input class="bp-link" readonly value="${esc(r.short_url || r.image_url)}">

@@ -124,8 +124,9 @@ function openOutreachModal(rec, root) {
         follow_up_date: box.querySelector('#o-followup').value || null,
         notes:        box.querySelector('#o-notes').value.trim() || null,
       };
-      if (isNew) { await insert('graffiti_outreach', row); showToast('✓ Contact logged'); }
-      else       { await update('graffiti_outreach', { id: rec.id }, row); showToast('✓ Updated'); }
+      const { error } = isNew ? await insert('graffiti_outreach', row) : await update('graffiti_outreach', { id: rec.id }, row);
+      if (error) { showToast('Not saved — check connection and try again', 'error'); return; }
+      showToast(isNew ? '✓ Contact logged' : '✓ Updated');
       closeModal();
       const { data } = await select('graffiti_outreach', { order: 'date', ascending: false });
       allOutreach = data || [];
