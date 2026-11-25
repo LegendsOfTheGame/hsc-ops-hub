@@ -1,5 +1,6 @@
 import { select, insert, update, remove } from '../db.js';
 import { showToast, openModal, closeModal, initChips, chipValue, setChip, localDateStr, fmtDate, fmtDateTime, diffBadge, statusBadge, navigate } from '../utils.js';
+import { isDemo } from '../demo.js';
 import { ALECTRA_OWNER, ASSET_RE, describeSpot, alectraMailto, gpsSources } from '../alectra.js';
 
 const SURFACE_TYPES = ['Brick','Metal','Glass','Plastic','Concrete','Wood','Other'];
@@ -95,6 +96,7 @@ async function loadAlectra(root) {
     });
     if (!onPC) return;
     el.querySelector('.al-email').addEventListener('click', () => {
+      if (isDemo) { showToast('Demo: the email to Alectra is turned off'); return; }
       window.location.href = alectraMailto({
         asset: asset.value,
         place: el.querySelector('.al-place').value.trim(),

@@ -1,3 +1,4 @@
+import { isDemo, tryDemoLogin, exitDemo } from './demo.js'; // must stay first: installs the demo guards
 import { select, insert } from './db.js';
 import { isAuthenticated, login, logout, startActivityWatcher, getAuthUser, getRole } from './auth.js';
 import { showToast, localDateStr } from './utils.js';
@@ -245,6 +246,7 @@ function hideLogin() {
 }
 
 function handleSessionTimeout() {
+  if (isDemo) { exitDemo(); return; }
   logout();
   showLogin('Your session expired after 60 minutes of inactivity.');
 }
@@ -252,6 +254,7 @@ function handleSessionTimeout() {
 // ── Logout ────────────────────────────────────────────────────────────────────
 
 async function doLogout() {
+  if (isDemo) { exitDemo(); return; }
   await logout();
   showLogin();
 }
@@ -294,6 +297,7 @@ async function init() {
     const btn = document.getElementById('login-btn');
     const email    = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
+    if (tryDemoLogin(email, password)) return;
     btn.textContent = 'Signing in…';
     btn.disabled = true;
     try {
@@ -311,6 +315,8 @@ async function init() {
   if (isAuthenticated()) {
     hideLogin();
     boot();
+  } else if (isDemo) {
+    exitDemo(); // demo session ended: never show the real login in demo mode
   } else {
     showLogin();
   }
