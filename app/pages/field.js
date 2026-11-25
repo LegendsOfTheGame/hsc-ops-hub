@@ -54,6 +54,15 @@ const CONTAINER_TYPES = ['City litter bin', 'Recycling bin', 'Business bin', 'Ot
 
 const LB_PER_KG = 2.20462;
 
+// ── Weight check ─────────────────────────────────────────────────────────────
+// A missed decimal point (27 Oct 2026: 3736 lb) wrecks the totals, so any bag
+// over 25 lb needs a confirmation (Haven, 25 Nov 2026). So does one under 1 kg,
+// except Yellow: those bags are small.
+const ASK_OVER_LB  = 25;
+const ASK_UNDER_LB = LB_PER_KG; // 1 kg
+
+const unusualWeight = (lb, color) => lb > 0 && (lb > ASK_OVER_LB || (color !== 'Yellow' && lb < ASK_UNDER_LB));
+
 // ── Repeat-tap guard ─────────────────────────────────────────────────────────
 // A second tap on Log within 30 s wrote the same entry twice (supplies 13 Oct,
 // a bag 3 Jul), which double-counts weight, cost and stock. A bag can't be
@@ -582,6 +591,7 @@ function openBagModal(root) {
               <button class="chip${unit === 'kg' ? ' selected' : ''}" data-value="kg">kg</button>
             </div>
           </div>
+          <div style="font-size:13px;margin-top:4px;min-height:18px" id="bag-weight-hint"></div>
         </div>
         <div class="form-group">
           <label>Time on Bag <span style="font-weight:400;font-size:11px">(min)</span></label>
@@ -637,6 +647,7 @@ function openBagModal(root) {
       const val = chipValue(colorGroup);
       const c = BAG_COLORS.find(c => c.name === val);
       colorHint.textContent = c ? `Counts as ${c.factor} orange-equivalent bag${c.factor === 1 ? '' : 's'}` : '';
+      showWeight(); // the minimum depends on the colour
     });
 
     const unitGroup = box.querySelector('#bag-unit');
@@ -644,7 +655,22 @@ function openBagModal(root) {
     unitGroup.addEventListener('click', () => {
       unit = chipValue(unitGroup) || unit;
       try { localStorage.setItem(UNIT_KEY, unit); } catch {}
+      showWeight();
     });
+
+    const weightInput = box.querySelector('#bag-weight');
+    const weightHint  = box.querySelector('#bag-weight-hint');
+    const toKg = v => Math.round((unit === 'lb' ? v / LB_PER_KG : v) * 100) / 100;
+    const toLb = v => (unit === 'lb' ? v : v * LB_PER_KG);
+    // Both units while typing, so a wrong unit or a missed decimal shows at once
+    const showWeight = () => {
+      const v = parseFloat(weightInput.value);
+      const odd = unusualWeight(toLb(v), chipValue(colorGroup));
+      weightHint.textContent = v > 0 ? fmtWeight(toKg(v)) + (odd ? ' — check the decimal point' : '') : '';
+      weightHint.style.color = odd ? 'var(--warning, #f39c12)' : 'var(--text-secondary)';
+      weightHint.style.fontWeight = odd ? '700' : '400';
+    };
+    weightInput.addEventListener('input', showWeight);
 
     let photoBase64 = null;
     let photoUrl    = null; // kept after upload so a failed save can retry without re-uploading
@@ -668,8 +694,17 @@ function openBagModal(root) {
       if (!color) { showToast('Select a bag color'); return; }
       if (!photoBase64) { showToast('A photo is required — no photo, no bag', 'error'); return; }
 
-      const weightRaw = parseFloat(box.querySelector('#bag-weight').value);
-      const weightKg  = weightRaw > 0 ? Math.round((unit === 'lb' ? weightRaw / LB_PER_KG : weightRaw) * 100) / 100 : null;
+      // A half-typed or unreadable number reads as blank, and would save with no weight
+      if (weightInput.validity.badInput) { showToast('Weight is not a number — check it', 'error'); weightInput.focus(); return; }
+      const weightRaw = parseFloat(weightInput.value);
+      const weightKg  = weightRaw > 0 ? toKg(weightRaw) : null;
+      const lb = toLb(weightRaw);
+      if (unusualWeight(lb, color) && !confirm(`You typed ${weightRaw} ${unit}. That is ${fmtWeight(weightKg)}, ${lb > ASK_OVER_LB ? 'over 25 lb' : 'under 1 kg'}.
+
+Check the decimal point. Save this weight?`)) {
+        weightInput.focus();
+        return;
+      }
       const minsRaw   = parseFloat(box.querySelector('#bag-minutes').value);
       const minutes   = minsRaw > 0 ? Math.round(minsRaw) : null;
 
